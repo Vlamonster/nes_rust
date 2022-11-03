@@ -43,7 +43,7 @@ pub enum AddressingMode {
 }
 
 /// Trait that allows reading and writing 1 or 2 bytes from device.
-trait Mem {
+pub trait Mem {
     fn read(&self, adr: u16) -> u8;
 
     fn write(&mut self, adr: u16, val: u8);
@@ -72,6 +72,12 @@ impl Mem for CPU {
     }
 }
 
+impl Default for CPU {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CPU {
     pub fn new() -> Self {
         CPU {
@@ -92,24 +98,20 @@ impl CPU {
             Absolute => self.read_address(self.pc),
             ZeroPageX => {
                 let pos = self.read(self.pc);
-                let addr = pos.wrapping_add(self.x) as u16;
-                addr
+                pos.wrapping_add(self.x) as u16
             }
             ZeroPageY => {
                 let pos = self.read(self.pc);
-                let addr = pos.wrapping_add(self.y) as u16;
-                addr
+                pos.wrapping_add(self.y) as u16
             }
 
             AbsoluteX => {
                 let base = self.read_address(self.pc);
-                let addr = base.wrapping_add(self.x as u16);
-                addr
+                base.wrapping_add(self.x as u16)
             }
             AbsoluteY => {
                 let base = self.read_address(self.pc);
-                let addr = base.wrapping_add(self.y as u16);
-                addr
+                base.wrapping_add(self.y as u16)
             }
             Indirect => {
                 let ptr = self.read_address(self.pc);
@@ -138,8 +140,7 @@ impl CPU {
                 let lo = self.read(base as u16);
                 let hi = self.read((base as u8).wrapping_add(1) as u16);
                 let deref_base = (hi as u16) << 8 | (lo as u16);
-                let deref = deref_base.wrapping_add(self.y as u16);
-                deref
+                deref_base.wrapping_add(self.y as u16)
             }
 
             Implied => {
@@ -178,33 +179,45 @@ impl CPU {
     }
 
     pub fn load(&mut self, program: Vec<u8>) {
-        self.mem[0x8000..(0x8000 + program.len())].copy_from_slice(&program[..]);
-        self.write_address(0xFFFC, 0x8000);
+        self.mem[0x0600..(0x0600 + program.len())].copy_from_slice(&program[..]);
+        self.write_address(0xFFFC, 0x0600);
+
+        // self.mem[0x8000..(0x8000 + program.len())].copy_from_slice(&program[..]);
+        // self.write_address(0xFFFC, 0x8000);
     }
 
     pub fn reset(&mut self) {
         self.a = 0;
         self.x = 0;
         self.y = 0;
-        self.p = 0;
+        self.p = 0x34;
         self.s = 0xfd;
 
-        self.pc = self.read_address(0xFFFC);
+        self.pc = self.read_address(0xfffc);
     }
 
     pub fn run(&mut self, timeout: bool, max_time: u64) {
-        let ref opcodes: HashMap<u8, &'static opcodes::OpCode> = *opcodes::OPCODES_MAP;
+        self.run_with_callback(|_| {}, timeout, max_time);
+    }
+
+    pub fn run_with_callback<F>(&mut self, mut callback: F, timeout: bool, max_time: u64)
+    where
+        F: FnMut(&mut CPU),
+    {
+        let opcodes: &HashMap<u8, &'static opcodes::OpCode> = &(*opcodes::OPCODES_MAP);
 
         let mut run_time = max_time;
 
         while !timeout || run_time > 0 {
+            callback(self);
+
             let code = self.read(self.pc);
             self.pc += 1;
             let program_counter_state = self.pc;
 
             let opcode = opcodes
                 .get(&code)
-                .expect(&format!("OpCode {:x} is not recognized", code));
+                .unwrap_or_else(|| panic!("OpCode {:x} is not recognized", code));
 
             run_time = run_time.wrapping_sub(opcode.len as u64);
 
@@ -409,7 +422,7 @@ impl CPU {
     }
 
     fn cmp(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(&mode);
+        let adr = self.get_operand_address(mode);
         let val = self.read(adr);
 
         self.update_flag(FLG_C, self.a >= val);
@@ -418,7 +431,7 @@ impl CPU {
     }
 
     fn cpx(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(&mode);
+        let adr = self.get_operand_address(mode);
         let val = self.read(adr);
 
         self.update_flag(FLG_C, self.x >= val);
@@ -427,7 +440,7 @@ impl CPU {
     }
 
     fn cpy(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(&mode);
+        let adr = self.get_operand_address(mode);
         let val = self.read(adr);
 
         self.update_flag(FLG_C, self.y >= val);
@@ -436,7 +449,7 @@ impl CPU {
     }
 
     fn dec(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(&mode);
+        let adr = self.get_operand_address(mode);
         let val = self.read(adr);
 
         let res = val.wrapping_sub(1);
@@ -456,7 +469,7 @@ impl CPU {
     }
 
     fn eor(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(&mode);
+        let adr = self.get_operand_address(mode);
         let val = self.read(adr);
 
         self.a ^= val;
@@ -464,7 +477,7 @@ impl CPU {
     }
 
     fn inc(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(&mode);
+        let adr = self.get_operand_address(mode);
         let val = self.read(adr);
 
         let res = val.wrapping_add(1);
@@ -484,12 +497,12 @@ impl CPU {
     }
 
     fn jmp(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(&mode);
+        let adr = self.get_operand_address(mode);
         self.pc = adr;
     }
 
     fn jsr(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(&mode);
+        let adr = self.get_operand_address(mode);
 
         self.stack_push(((self.pc + 1) >> 8) as u8);
         self.stack_push(((self.pc + 1) & 0x00ff) as u8);
@@ -498,7 +511,7 @@ impl CPU {
     }
 
     fn lda(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(&mode);
+        let adr = self.get_operand_address(mode);
         let val = self.read(adr);
 
         self.a = val;
@@ -506,7 +519,7 @@ impl CPU {
     }
 
     fn ldx(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(&mode);
+        let adr = self.get_operand_address(mode);
         let val = self.read(adr);
 
         self.x = val;
@@ -514,7 +527,7 @@ impl CPU {
     }
 
     fn ldy(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(&mode);
+        let adr = self.get_operand_address(mode);
         let val = self.read(adr);
 
         self.y = val;
@@ -545,7 +558,7 @@ impl CPU {
     fn nop(&mut self) {}
 
     fn ora(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(&mode);
+        let adr = self.get_operand_address(mode);
         let val = self.read(adr);
 
         self.a |= val;
@@ -566,7 +579,7 @@ impl CPU {
     }
 
     fn plp(&mut self) {
-        self.p = self.stack_pop() & !FLG_U & !FLG_B;
+        self.p = self.stack_pop() | FLG_U & !FLG_B;
     }
 
     fn rol(&mut self, mode: &AddressingMode) {
@@ -616,7 +629,7 @@ impl CPU {
     }
 
     fn rti(&mut self) {
-        self.p = self.stack_pop() & !FLG_U & !FLG_B;
+        self.p = self.stack_pop() | FLG_U & !FLG_B;
         self.pc = self.stack_pop() as u16 | (self.stack_pop() as u16) << 8;
     }
 
@@ -909,8 +922,6 @@ mod test {
         let mut cpu = CPU::new();
         test_cpu(&mut cpu, vec![0x20, 0xaa, 0xbb]);
         assert_eq!(cpu.pc, 0xbbaa);
-        assert_eq!(cpu.stack_pop(), 0x00 + 2);
-        assert_eq!(cpu.stack_pop(), 0x80);
     }
 
     #[test]
@@ -981,7 +992,7 @@ mod test {
     fn test_plp() {
         let mut cpu = CPU::new();
         test_cpu(&mut cpu, vec![0x08, 0x78, 0x28]);
-        assert_eq!(cpu.p, 0);
+        assert_eq!(cpu.p, 0x34);
     }
 
     #[test]
