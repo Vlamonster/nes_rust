@@ -263,6 +263,19 @@ impl CPU {
                 0x8a => self.txa(),
                 0x9a => self.txs(),
                 0x98 => self.tya(),
+                // illegal opcodes
+                0x1a | 0x3a | 0x5a | 0x7a | 0xda | 0xfa | 0x80 | 0x82 | 0x89 | 0xc2 | 0xe2
+                | 0x04 | 0x44 | 0x64 | 0x14 | 0x34 | 0x54 | 0x74 | 0xd4 | 0xf4 | 0x0c | 0x1c
+                | 0x3c | 0x5c | 0x7c | 0xdc | 0xfc => self.nop(),
+                0xa7 | 0xb7 | 0xaf | 0xbf | 0xa3 | 0xb3 => self.lax(&opcode.mode),
+                0x87 | 0x97 | 0x8f | 0x83 => self.sax(&opcode.mode),
+                0xeb => self.sbc(&opcode.mode),
+                0xc7 | 0xd7 | 0xCF | 0xdF | 0xdb | 0xd3 | 0xc3 => self.dcp(&opcode.mode),
+                0xe7 | 0xf7 | 0xef | 0xff | 0xfb | 0xe3 | 0xf3 => self.isb(&opcode.mode),
+                0x07 | 0x17 | 0x0F | 0x1f | 0x1b | 0x03 | 0x13 => self.slo(&opcode.mode),
+                0x27 | 0x37 | 0x2F | 0x3F | 0x3b | 0x33 | 0x23 => self.rla(&opcode.mode),
+                0x47 | 0x57 | 0x4F | 0x5f | 0x5b | 0x43 | 0x53 => self.sre(&opcode.mode),
+                0x67 | 0x77 | 0x6f | 0x7f | 0x7b | 0x63 | 0x73 => self.rra(&opcode.mode),
                 _ => todo!("OpCode was parsed, but has not been implemented yet."),
             }
 
@@ -692,6 +705,46 @@ impl CPU {
         self.a = self.y;
         self.update_zn_flags(self.a);
     }
+
+    fn lax(&mut self, mode: &AddressingMode) {
+        self.lda(mode);
+        self.ldx(mode);
+    }
+
+    fn sax(&mut self, mode: &AddressingMode) {
+        let adr = self.get_operand_address(mode);
+        self.write(adr, self.a & self.x);
+    }
+
+    fn dcp(&mut self, mode: &AddressingMode) {
+        self.dec(mode);
+        self.cmp(mode);
+    }
+
+    fn isb(&mut self, mode: &AddressingMode) {
+        self.inc(mode);
+        self.sbc(mode);
+    }
+
+    fn slo(&mut self, mode: &AddressingMode) {
+        self.asl(mode);
+        self.ora(mode);
+    }
+
+    fn rla(&mut self, mode: &AddressingMode) {
+        self.rol(mode);
+        self.and(mode);
+    }
+
+    fn sre(&mut self, mode: &AddressingMode) {
+        self.lsr(mode);
+        self.eor(mode);
+    }
+
+    fn rra(&mut self, mode: &AddressingMode) {
+        self.ror(mode);
+        self.adc(mode);
+    }
 }
 
 #[cfg(test)]
@@ -1048,4 +1101,25 @@ mod test {
         let cpu = test_cpu(vec![0xa0, 0x55, 0x98]);
         assert_eq!(cpu.a, 0x55);
     }
+
+    #[test]
+    fn test_lax() {
+        let cpu = test_cpu(vec![0xa9, 0x55, 0xa2, 0x55, 0xa7, 0x00]);
+        assert_eq!(cpu.a, 0);
+        assert_eq!(cpu.x, 0)
+    }
+
+    // todo add SAX test
+
+    // todo add DCP test
+
+    // todo add ISB test
+
+    // todo add SLO test
+
+    // todo add RLA test
+
+    // todo add SRE test
+
+    // todo add RRA test
 }

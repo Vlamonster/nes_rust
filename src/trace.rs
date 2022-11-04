@@ -7,7 +7,9 @@ pub fn trace(cpu: &CPU) -> String {
     let ref opcodes: HashMap<u8, &'static opcodes::OpCode> = *opcodes::OPCODES_MAP;
 
     let code = cpu.read(cpu.pc);
-    let opcode = opcodes.get(&code).unwrap();
+    let opcode = opcodes
+        .get(&code)
+        .expect(&*format!("OpCode {:#02x} was not found", code));
 
     let begin = cpu.pc;
     let mut hex_dump = vec![];
