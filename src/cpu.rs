@@ -1,10 +1,10 @@
+use crate::bus::Bus;
 use crate::cpu::AddressingMode::{
     Absolute, AbsoluteX, AbsoluteY, Immediate, Implied, Indirect, IndirectX, IndirectY, ZeroPage,
     ZeroPageX, ZeroPageY,
 };
 use crate::opcodes;
 use std::collections::HashMap;
-use crate::bus::Bus;
 
 // status register bits, useful for dealing with flags
 const FLG_C: u8 = 0b0000_0001;
@@ -73,14 +73,8 @@ impl Mem for CPU {
     }
 }
 
-impl Default for CPU {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl CPU {
-    pub fn new() -> Self {
+    pub fn new(bus: Bus) -> Self {
         CPU {
             a: 0,
             x: 0,
@@ -88,7 +82,7 @@ impl CPU {
             p: 0,
             s: 0,
             pc: 0,
-            bus: Bus::new()
+            bus,
         }
     }
 
@@ -173,22 +167,6 @@ impl CPU {
         self.read(0x0100 | self.s as u16)
     }
 
-    pub fn load_and_run(&mut self, program: Vec<u8>, timeout: bool, max_time: u64) {
-        self.load(program);
-        self.reset();
-        self.run(timeout, max_time);
-    }
-
-    pub fn load(&mut self, program: Vec<u8>) {
-        for i in 0..(program.len() as u16) {
-            self.write(0x0600 + i, program[i as usize]);
-        }
-        self.write_address(0xFFFC, 0x0600);
-
-        // self.mem[0x8000..(0x8000 + program.len())].copy_from_slice(&program[..]);
-        // self.write_address(0xFFFC, 0x8000);
-    }
-
     pub fn reset(&mut self) {
         self.a = 0;
         self.x = 0;
@@ -204,8 +182,8 @@ impl CPU {
     }
 
     pub fn run_with_callback<F>(&mut self, mut callback: F, timeout: bool, max_time: u64)
-    where
-        F: FnMut(&mut CPU),
+        where
+            F: FnMut(&mut CPU),
     {
         let opcodes: &HashMap<u8, &'static opcodes::OpCode> = &(*opcodes::OPCODES_MAP);
 
@@ -714,133 +692,126 @@ impl CPU {
 
 #[cfg(test)]
 mod test {
+    use crate::cartridge::test::test_rom;
     use super::*;
 
-    fn test_cpu(cpu: &mut CPU, program: Vec<u8>) {
-        let max_time = program.len() as u64;
-        cpu.load_and_run(program, true, max_time);
+    /// Takes a vector of program memory and tests it starting from 0x8000.
+    fn test_cpu(program: Vec<u8>) -> CPU {
+        let program_size = program.len();
+        let mut padded_program = program;
+        padded_program.extend(vec![0; 2 * 0x4000 - program_size - 4]);
+        padded_program.extend(vec![0x00, 0x80, 0x00, 0x00]);
+
+        let bus = Bus::new(test_rom(padded_program));
+        let mut cpu = CPU::new(bus);
+        cpu.reset();
+        cpu.run(true, program_size as u64);
+
+        cpu
     }
 
     #[test]
     fn test_adc() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0x05, 0x69, 0x10]);
+        let cpu = test_cpu(vec![0xa9, 0x05, 0x69, 0x10]);
         assert_eq!(cpu.a, 0x15);
     }
 
     #[test]
     fn test_and() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0xf0, 0x29, 0x8f]);
+        let cpu = test_cpu(vec![0xa9, 0xf0, 0x29, 0x8f]);
         assert_eq!(cpu.a, 0x80);
     }
 
     #[test]
     fn test_asl() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0xf0, 0x0a]);
+        let cpu = test_cpu(vec![0xa9, 0xf0, 0x0a]);
         assert_eq!(cpu.a, 0xe0);
     }
 
     #[test]
     fn test_bcc() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x90, 0x02, 0xa9, 0xff]);
+        let cpu = test_cpu(vec![0x90, 0x02, 0xa9, 0xff]);
         assert_eq!(cpu.a, 0x00);
     }
 
     #[test]
     fn test_bcs() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xb0, 0x01, 0x00, 0xa9, 0xff]);
+        let cpu = test_cpu(vec![0xb0, 0x01, 0x00, 0xa9, 0xff]);
         assert_eq!(cpu.a, 0x00);
     }
 
     #[test]
     fn test_beq() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xf0, 0x01, 0x00, 0xa9, 0xff]);
+        let cpu = test_cpu(vec![0xf0, 0x01, 0x00, 0xa9, 0xff]);
         assert_eq!(cpu.a, 0x00);
     }
 
     #[test]
     fn test_bit() {
-        let mut cpu = CPU::new();
-        cpu.write(0x0000, 0xf0);
-        test_cpu(&mut cpu, vec![0x2c, 0x00, 0x00]);
+        let cpu = test_cpu(vec![0x2c, 0x02, 0x80]);
         assert_ne!(cpu.p & FLG_Z, 0);
-        assert_ne!(cpu.p & FLG_V, 0);
+        assert_eq!(cpu.p & FLG_V, 0);
         assert_ne!(cpu.p & FLG_N, 0);
     }
 
     #[test]
     fn test_bmi() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x30, 0x01, 0x00, 0xa9, 0xff]);
+        let cpu = test_cpu(vec![0x30, 0x01, 0x00, 0xa9, 0xff]);
         assert_eq!(cpu.a, 0x00);
     }
 
     #[test]
     fn test_bne() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xd0, 0x02, 0xa9, 0xff]);
+        let cpu = test_cpu(vec![0xd0, 0x02, 0xa9, 0xff]);
         assert_eq!(cpu.a, 0x00);
     }
 
     #[test]
     fn test_bpl() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x10, 0x02, 0xa9, 0xff]);
+        let cpu = test_cpu(vec![0x10, 0x02, 0xa9, 0xff]);
         assert_eq!(cpu.a, 0x00);
     }
 
     // todo add BRK test
     #[test]
     fn test_bvc() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x50, 0x02, 0xa9, 0xff]);
+        let cpu = test_cpu(vec![0x50, 0x02, 0xa9, 0xff]);
         assert_eq!(cpu.a, 0x00);
     }
 
     #[test]
     fn test_bvs() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x70, 0x01, 0x00, 0xa9, 0xff]);
+        let cpu = test_cpu(vec![0x70, 0x01, 0x00, 0xa9, 0xff]);
         assert_eq!(cpu.a, 0x00);
     }
 
     #[test]
     fn test_clc() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x38, 0x18]);
+        let cpu = test_cpu(vec![0x38, 0x18]);
         assert_eq!(cpu.p & FLG_C, 0)
     }
 
     #[test]
     fn test_cld() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xf8, 0xd8]);
+        let cpu = test_cpu(vec![0xf8, 0xd8]);
         assert_eq!(cpu.p & FLG_D, 0)
     }
 
     #[test]
     fn test_cli() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x78, 0x58]);
+        let cpu = test_cpu(vec![0x78, 0x58]);
         assert_eq!(cpu.p & FLG_I, 0)
     }
 
     #[test]
     fn test_clv() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x69, 0x80, 0x69, 0x80, 0xb8]);
+        let cpu = test_cpu(vec![0x69, 0x80, 0x69, 0x80, 0xb8]);
         assert_eq!(cpu.p & FLG_V, 0)
     }
 
     #[test]
     fn test_cmp() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xc9, 0x00]);
+        let cpu = test_cpu(vec![0xc9, 0x00]);
         assert_ne!(cpu.p & FLG_C, 0);
         assert_ne!(cpu.p & FLG_Z, 0);
         assert_eq!(cpu.p & FLG_V, 0);
@@ -848,8 +819,7 @@ mod test {
 
     #[test]
     fn test_cpx() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xe0, 0x00]);
+        let cpu = test_cpu(vec![0xe0, 0x00]);
         assert_ne!(cpu.p & FLG_C, 0);
         assert_ne!(cpu.p & FLG_Z, 0);
         assert_eq!(cpu.p & FLG_V, 0);
@@ -857,8 +827,7 @@ mod test {
 
     #[test]
     fn test_cpy() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xc0, 0x00]);
+        let cpu = test_cpu(vec![0xc0, 0x00]);
         assert_ne!(cpu.p & FLG_C, 0);
         assert_ne!(cpu.p & FLG_Z, 0);
         assert_eq!(cpu.p & FLG_V, 0);
@@ -866,249 +835,213 @@ mod test {
 
     #[test]
     fn test_dec() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xce, 0x00, 0x00]);
+        let cpu = test_cpu(vec![0xce, 0x00, 0x00]);
         assert_eq!(cpu.read(0x0000), 0xff);
     }
 
     #[test]
     fn test_dex() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xca]);
+        let cpu = test_cpu(vec![0xca]);
         assert_eq!(cpu.x, 0xff);
     }
 
     #[test]
     fn test_dey() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x88]);
+        let cpu = test_cpu(vec![0x88]);
         assert_eq!(cpu.y, 0xff);
     }
 
     #[test]
     fn test_eor() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0xff, 0x49, 0xf0]);
+        let cpu = test_cpu(vec![0xa9, 0xff, 0x49, 0xf0]);
         assert_eq!(cpu.a, 0x0f);
     }
 
     #[test]
     fn test_inc() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xee, 0x00, 0x00]);
+        let cpu = test_cpu(vec![0xee, 0x00, 0x00]);
         assert_eq!(cpu.read(0x0000), 0x01);
     }
 
     #[test]
     fn test_inx() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xe8]);
+        let cpu = test_cpu(vec![0xe8]);
         assert_eq!(cpu.x, 0x01);
     }
 
     #[test]
     fn test_iny() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xc8]);
+        let cpu = test_cpu(vec![0xc8]);
         assert_eq!(cpu.y, 0x01);
     }
 
     #[test]
     fn test_jmp() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x4c, 0xaa, 0xbb]);
+        let cpu = test_cpu(vec![0x4c, 0xaa, 0xbb]);
         assert_eq!(cpu.pc, 0xbbaa);
     }
 
     #[test]
     fn test_jsr() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x20, 0xaa, 0xbb]);
+        let cpu = test_cpu(vec![0x20, 0xaa, 0xbb]);
         assert_eq!(cpu.pc, 0xbbaa);
     }
 
     #[test]
     fn test_lda() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0xee]);
+        let cpu = test_cpu(vec![0xa9, 0xee]);
         assert_eq!(cpu.a, 0xee);
     }
 
     #[test]
     fn test_ldx() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa2, 0xee]);
+        let cpu = test_cpu(vec![0xa2, 0xee]);
         assert_eq!(cpu.x, 0xee);
     }
 
     #[test]
     fn test_ldy() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa0, 0xee]);
+        let cpu = test_cpu(vec![0xa0, 0xee]);
         assert_eq!(cpu.y, 0xee);
     }
 
     #[test]
     fn test_lsr() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0x0f, 0x4a]);
+        let cpu = test_cpu(vec![0xa9, 0x0f, 0x4a]);
         assert_eq!(cpu.a, 0x07);
         assert_ne!(cpu.p & FLG_C, 0)
     }
 
     #[test]
     fn test_nop() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0xcd, 0xea]);
+        let cpu = test_cpu(vec![0xa9, 0xcd, 0xea]);
         assert_eq!(cpu.a, 0xcd);
     }
 
     #[test]
     fn test_ora() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x09, 0xf0]);
+        let cpu = test_cpu(vec![0x09, 0xf0]);
         assert_eq!(cpu.a, 0xf0);
     }
 
     #[test]
     fn test_pha() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0xf0, 0x48]);
+        let mut cpu = test_cpu(vec![0xa9, 0xf0, 0x48]);
         assert_ne!(cpu.stack_pop() & FLG_N, 0);
     }
 
     #[test]
     fn test_php() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x78, 0x08]);
+        let mut cpu = test_cpu(vec![0x78, 0x08]);
         assert_ne!(cpu.stack_pop() & FLG_I, 0);
     }
 
     #[test]
     fn test_pla() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0xf0, 0x48, 0xa9, 0x00, 0x68]);
+        let cpu = test_cpu(vec![0xa9, 0xf0, 0x48, 0xa9, 0x00, 0x68]);
         assert_eq!(cpu.a, 0xf0);
     }
 
     #[test]
     fn test_plp() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x08, 0x78, 0x28]);
+        let cpu = test_cpu(vec![0x08, 0x78, 0x28]);
         assert_eq!(cpu.p, 0x34);
     }
 
     #[test]
     fn test_rol() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x38, 0x2a, 0x00]);
+        let cpu = test_cpu(vec![0x38, 0x2a, 0x00]);
         assert_eq!(cpu.a, 0x01);
     }
 
     #[test]
     fn test_ror() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x38, 0x6a, 0x00]);
+        let cpu = test_cpu(vec![0x38, 0x6a, 0x00]);
         assert_eq!(cpu.a, 0x80);
     }
 
     // todo add RTI test
-
     #[test]
     fn test_rts() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0x80, 0x48, 0xa9, 0x06, 0x48, 0x60]);
+        let cpu = test_cpu(vec![0xa9, 0x80, 0x48, 0xa9, 0x06, 0x48, 0x60]);
         assert_eq!(cpu.pc, 0x8007);
     }
 
     #[test]
     fn test_sbc() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xe9, 0x01, 0xe9, 0x01]);
+        let cpu = test_cpu(vec![0xe9, 0x01, 0xe9, 0x01]);
         assert_eq!(cpu.a, (!0x02u8).wrapping_sub(1));
     }
 
     #[test]
     fn test_sec() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x38]);
+        let cpu = test_cpu(vec![0x38]);
         assert_ne!(cpu.p & FLG_C, 0);
     }
 
     #[test]
     fn test_sed() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xf8]);
+        let cpu = test_cpu(vec![0xf8]);
         assert_ne!(cpu.p & FLG_D, 0);
     }
 
     #[test]
     fn test_sei() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0x78]);
+        let cpu = test_cpu(vec![0x78]);
         assert_ne!(cpu.p & FLG_I, 0);
     }
 
     #[test]
     fn test_sta() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0x55, 0x8d, 0x00, 0x00]);
+        let cpu = test_cpu(vec![0xa9, 0x55, 0x8d, 0x00, 0x00]);
         assert_eq!(cpu.read(0x0000), 0x55);
     }
 
     #[test]
     fn test_stx() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa2, 0x55, 0x8e, 0x00, 0x00]);
+        let cpu = test_cpu(vec![0xa2, 0x55, 0x8e, 0x00, 0x00]);
         assert_eq!(cpu.read(0x0000), 0x55);
     }
 
     #[test]
     fn test_sty() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa0, 0x55, 0x8c, 0x00, 0x00]);
+        let cpu = test_cpu(vec![0xa0, 0x55, 0x8c, 0x00, 0x00]);
         assert_eq!(cpu.read(0x0000), 0x55);
     }
 
     #[test]
     fn test_tax() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0x55, 0xaa]);
+        let cpu = test_cpu(vec![0xa9, 0x55, 0xaa]);
         assert_eq!(cpu.x, 0x55);
     }
 
     #[test]
     fn test_tay() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa9, 0x55, 0xa8]);
+        let cpu = test_cpu(vec![0xa9, 0x55, 0xa8]);
         assert_eq!(cpu.y, 0x55);
     }
 
     #[test]
     fn test_tsx() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xba]);
+        let cpu = test_cpu(vec![0xba]);
         assert_eq!(cpu.x, 0xfd);
     }
 
     #[test]
     fn test_txa() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa2, 0x55, 0x8a]);
+        let cpu = test_cpu(vec![0xa2, 0x55, 0x8a]);
         assert_eq!(cpu.a, 0x55);
     }
 
     #[test]
     fn test_txs() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa2, 0x55, 0x9a]);
+        let cpu = test_cpu(vec![0xa2, 0x55, 0x9a]);
         assert_eq!(cpu.s, 0x55);
     }
 
     #[test]
     fn test_tya() {
-        let mut cpu = CPU::new();
-        test_cpu(&mut cpu, vec![0xa0, 0x55, 0x98]);
+        let cpu = test_cpu(vec![0xa0, 0x55, 0x98]);
         assert_eq!(cpu.a, 0x55);
     }
 }
