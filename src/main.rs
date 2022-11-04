@@ -4,6 +4,7 @@ pub mod cpu;
 pub mod opcodes;
 mod bus;
 
+use std::time;
 use crate::cpu::{Mem, CPU};
 use rand::Rng;
 use sdl2::event::Event;
@@ -143,6 +144,7 @@ fn main() {
                 canvas.present();
             }
 
+            spin_sleep::sleep(time::Duration::from_nanos(70_000));
         },
         false,
         0,
