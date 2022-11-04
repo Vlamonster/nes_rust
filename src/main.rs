@@ -2,6 +2,7 @@
 
 pub mod cpu;
 pub mod opcodes;
+mod bus;
 
 use crate::cpu::{Mem, CPU};
 use rand::Rng;
@@ -125,6 +126,7 @@ fn main() {
     let mut cpu = CPU::new();
     cpu.load(game_code);
     cpu.reset();
+    cpu.pc = 0x0600;
 
     // run the game cycle
     let mut screen_state = [0; 32 * 3 * 32];
@@ -141,7 +143,6 @@ fn main() {
                 canvas.present();
             }
 
-            ::std::thread::sleep(std::time::Duration::new(0, 70_000));
         },
         false,
         0,

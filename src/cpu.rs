@@ -4,6 +4,7 @@ use crate::cpu::AddressingMode::{
 };
 use crate::opcodes;
 use std::collections::HashMap;
+use crate::bus::Bus;
 
 // status register bits, useful for dealing with flags
 const FLG_C: u8 = 0b0000_0001;
@@ -23,7 +24,7 @@ pub struct CPU {
     pub p: u8,
     pub s: u8,
     pub pc: u16,
-    mem: [u8; 0x10000],
+    pub bus: Bus,
 }
 
 #[derive(Debug)]
@@ -64,11 +65,11 @@ pub trait Mem {
 
 impl Mem for CPU {
     fn read(&self, adr: u16) -> u8 {
-        self.mem[adr as usize]
+        self.bus.read(adr)
     }
 
     fn write(&mut self, adr: u16, val: u8) {
-        self.mem[adr as usize] = val;
+        self.bus.write(adr, val)
     }
 }
 
@@ -87,7 +88,7 @@ impl CPU {
             p: 0,
             s: 0,
             pc: 0,
-            mem: [0; 0x10000],
+            bus: Bus::new()
         }
     }
 
@@ -179,7 +180,9 @@ impl CPU {
     }
 
     pub fn load(&mut self, program: Vec<u8>) {
-        self.mem[0x0600..(0x0600 + program.len())].copy_from_slice(&program[..]);
+        for i in 0..(program.len() as u16) {
+            self.write(0x0600 + i, program[i as usize]);
+        }
         self.write_address(0xFFFC, 0x0600);
 
         // self.mem[0x8000..(0x8000 + program.len())].copy_from_slice(&program[..]);
@@ -639,7 +642,7 @@ impl CPU {
 
     fn sbc(&mut self, mode: &AddressingMode) {
         let adr = self.get_operand_address(mode);
-        let val = (!self.read(adr)).wrapping_add(1); // might not need +1
+        let val = !self.read(adr);
 
         let (tmp, c1) = self.a.overflowing_add(val);
         let (res, c2) = tmp.overflowing_add(self.p & 0x01);
@@ -1022,7 +1025,7 @@ mod test {
     fn test_sbc() {
         let mut cpu = CPU::new();
         test_cpu(&mut cpu, vec![0xe9, 0x01, 0xe9, 0x01]);
-        assert_eq!(cpu.a, (!0x02u8).wrapping_add(1));
+        assert_eq!(cpu.a, (!0x02u8).wrapping_sub(1));
     }
 
     #[test]
