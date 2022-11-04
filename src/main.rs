@@ -4,10 +4,12 @@ mod bus;
 mod cartridge;
 pub mod cpu;
 pub mod opcodes;
+mod trace;
 
 use crate::bus::Bus;
 use crate::cartridge::Rom;
 use crate::cpu::{Mem, CPU};
+use crate::trace::trace;
 use rand::Rng;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -103,28 +105,30 @@ fn main() {
         .unwrap();
 
     // load the game
-    let bytes = fs::read("snake.nes").unwrap();
+    let bytes = fs::read("nestest.nes").unwrap();
     let rom = Rom::new(&bytes);
     let bus = Bus::new(rom);
     let mut cpu = CPU::new(bus);
     cpu.reset();
+    cpu.pc = 0xc000;
 
     // run the game cycle
-    let mut screen_state = [0; 32 * 3 * 32];
-    let mut rng = rand::thread_rng();
+    // let mut screen_state = [0; 32 * 3 * 32];
+    // let mut rng = rand::thread_rng();
 
     cpu.run_with_callback(
         move |cpu| {
-            handle_user_input(cpu, &mut event_pump);
-            cpu.write(0xfe, rng.gen_range(1, 16));
-
-            if read_screen_state(cpu, &mut screen_state) {
-                texture.update(None, &screen_state, 32 * 3).unwrap();
-                canvas.copy(&texture, None, None).unwrap();
-                canvas.present();
-            }
-
-            spin_sleep::sleep(time::Duration::from_nanos(70_000));
+            println!("{}", trace(cpu));
+            // handle_user_input(cpu, &mut event_pump);
+            // cpu.write(0xfe, rng.gen_range(1, 16));
+            //
+            // if read_screen_state(cpu, &mut screen_state) {
+            //     texture.update(None, &screen_state, 32 * 3).unwrap();
+            //     canvas.copy(&texture, None, None).unwrap();
+            //     canvas.present();
+            // }
+            //
+            // spin_sleep::sleep(time::Duration::from_nanos(70_000));
         },
         false,
         0,

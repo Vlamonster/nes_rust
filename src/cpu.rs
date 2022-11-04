@@ -86,30 +86,30 @@ impl CPU {
         }
     }
 
-    fn get_operand_address(&self, mode: &AddressingMode) -> u16 {
+    pub fn get_effective_address(&self, mode: &AddressingMode, adr: u16) -> u16 {
         match mode {
-            Immediate => self.pc,
-            ZeroPage => self.read(self.pc) as u16,
-            Absolute => self.read_address(self.pc),
+            Immediate => adr,
+            ZeroPage => self.read(adr) as u16,
+            Absolute => self.read_address(adr),
             ZeroPageX => {
-                let pos = self.read(self.pc);
+                let pos = self.read(adr);
                 pos.wrapping_add(self.x) as u16
             }
             ZeroPageY => {
-                let pos = self.read(self.pc);
+                let pos = self.read(adr);
                 pos.wrapping_add(self.y) as u16
             }
 
             AbsoluteX => {
-                let base = self.read_address(self.pc);
+                let base = self.read_address(adr);
                 base.wrapping_add(self.x as u16)
             }
             AbsoluteY => {
-                let base = self.read_address(self.pc);
+                let base = self.read_address(adr);
                 base.wrapping_add(self.y as u16)
             }
             Indirect => {
-                let ptr = self.read_address(self.pc);
+                let ptr = self.read_address(adr);
 
                 // An original 6502 has does not correctly fetch the target address
                 // if the indirect vector falls on a page boundary
@@ -122,7 +122,7 @@ impl CPU {
                 (hi as u16) << 8 | (lo as u16)
             }
             IndirectX => {
-                let base = self.read(self.pc);
+                let base = self.read(adr);
 
                 let ptr: u8 = (base as u8).wrapping_add(self.x);
                 let lo = self.read(ptr as u16);
@@ -130,7 +130,7 @@ impl CPU {
                 (hi as u16) << 8 | (lo as u16)
             }
             IndirectY => {
-                let base = self.read(self.pc);
+                let base = self.read(adr);
 
                 let lo = self.read(base as u16);
                 let hi = self.read((base as u8).wrapping_add(1) as u16);
@@ -142,6 +142,10 @@ impl CPU {
                 panic!("mode {:?} is not supported", mode);
             }
         }
+    }
+
+    fn get_operand_address(&self, mode: &AddressingMode) -> u16 {
+        self.get_effective_address(mode, self.pc)
     }
 
     fn update_flag(&mut self, flag: u8, condition: bool) {
@@ -171,7 +175,7 @@ impl CPU {
         self.a = 0;
         self.x = 0;
         self.y = 0;
-        self.p = 0x34;
+        self.p = 0x24;
         self.s = 0xfd;
 
         self.pc = self.read_address(0xfffc);
@@ -182,8 +186,8 @@ impl CPU {
     }
 
     pub fn run_with_callback<F>(&mut self, mut callback: F, timeout: bool, max_time: u64)
-        where
-            F: FnMut(&mut CPU),
+    where
+        F: FnMut(&mut CPU),
     {
         let opcodes: &HashMap<u8, &'static opcodes::OpCode> = &(*opcodes::OPCODES_MAP);
 
@@ -560,7 +564,7 @@ impl CPU {
     }
 
     fn plp(&mut self) {
-        self.p = self.stack_pop() | FLG_U & !FLG_B;
+        self.p = self.stack_pop() & !FLG_B | FLG_U;
     }
 
     fn rol(&mut self, mode: &AddressingMode) {
@@ -610,7 +614,7 @@ impl CPU {
     }
 
     fn rti(&mut self) {
-        self.p = self.stack_pop() | FLG_U & !FLG_B;
+        self.p = self.stack_pop() & !FLG_B | FLG_U;
         self.pc = self.stack_pop() as u16 | (self.stack_pop() as u16) << 8;
     }
 
@@ -692,8 +696,8 @@ impl CPU {
 
 #[cfg(test)]
 mod test {
-    use crate::cartridge::test::test_rom;
     use super::*;
+    use crate::cartridge::test::test_rom;
 
     /// Takes a vector of program memory and tests it starting from 0x8000.
     fn test_cpu(program: Vec<u8>) -> CPU {
