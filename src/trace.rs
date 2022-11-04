@@ -1,10 +1,9 @@
 use crate::cpu::{AddressingMode, Mem, CPU};
 use crate::opcodes;
 use std::collections::HashMap;
-use std::fmt::format;
 
-pub fn trace(cpu: &CPU) -> String {
-    let ref opcodes: HashMap<u8, &'static opcodes::OpCode> = *opcodes::OPCODES_MAP;
+pub fn trace(cpu: &mut CPU) -> String {
+    let opcodes: &HashMap<u8, &'static opcodes::OpCode> = &(*opcodes::OPCODES_MAP);
 
     let code = cpu.read(cpu.pc);
     let opcode = opcodes
@@ -26,7 +25,7 @@ pub fn trace(cpu: &CPU) -> String {
     let tmp = match opcode.len {
         1 => match opcode.code {
             // Accumulator is operand
-            0x0a | 0x4a | 0x2a | 0x6a => format!("A "),
+            0x0a | 0x4a | 0x2a | 0x6a => "A ".to_string(),
             _ => String::from(""),
         },
         2 => {
@@ -116,13 +115,11 @@ pub fn trace(cpu: &CPU) -> String {
     )
     .trim()
     .to_string();
-    let res_str = format!(
+    format!(
         "{:47} A:{:02x} X:{:02x} Y:{:02x} P:{:02x} SP:{:02x}",
         asm_str, cpu.a, cpu.x, cpu.y, cpu.p, cpu.s,
     )
-    .to_ascii_uppercase();
-
-    res_str
+    .to_ascii_uppercase()
 }
 
 #[cfg(test)]
@@ -155,7 +152,7 @@ mod test {
     #[test]
     fn test_format_trace() {
         let mut result: Vec<String> = vec![];
-        let cpu = test_cpu_trace(&mut result, vec![0xa2, 0x01, 0xca, 0x88]);
+        test_cpu_trace(&mut result, vec![0xa2, 0x01, 0xca, 0x88]);
 
         assert_eq!(
             "8000  A2 01     LDX #$01                        A:00 X:00 Y:00 P:24 SP:FD",

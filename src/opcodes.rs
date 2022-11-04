@@ -278,8 +278,8 @@ lazy_static! {
 
         OpCode::new(0xc7, "*DCP", 2, 5, AddressingMode::ZeroPage),
         OpCode::new(0xd7, "*DCP", 2, 6, AddressingMode::ZeroPageX),
-        OpCode::new(0xCF, "*DCP", 3, 6, AddressingMode::Absolute),
-        OpCode::new(0xdF, "*DCP", 3, 7, AddressingMode::AbsoluteX),
+        OpCode::new(0xcf, "*DCP", 3, 6, AddressingMode::Absolute),
+        OpCode::new(0xdf, "*DCP", 3, 7, AddressingMode::AbsoluteX),
         OpCode::new(0xdb, "*DCP", 3, 7, AddressingMode::AbsoluteY),
         OpCode::new(0xd3, "*DCP", 2, 8, AddressingMode::IndirectY),
         OpCode::new(0xc3, "*DCP", 2, 8, AddressingMode::IndirectX),
@@ -294,7 +294,7 @@ lazy_static! {
 
         OpCode::new(0x07, "*SLO", 2, 5, AddressingMode::ZeroPage),
         OpCode::new(0x17, "*SLO", 2, 6, AddressingMode::ZeroPageX),
-        OpCode::new(0x0F, "*SLO", 3, 6, AddressingMode::Absolute),
+        OpCode::new(0x0f, "*SLO", 3, 6, AddressingMode::Absolute),
         OpCode::new(0x1f, "*SLO", 3, 7, AddressingMode::AbsoluteX),
         OpCode::new(0x1b, "*SLO", 3, 7, AddressingMode::AbsoluteY),
         OpCode::new(0x03, "*SLO", 2, 8, AddressingMode::IndirectX),
@@ -302,15 +302,15 @@ lazy_static! {
 
         OpCode::new(0x27, "*RLA", 2, 5, AddressingMode::ZeroPage),
         OpCode::new(0x37, "*RLA", 2, 6, AddressingMode::ZeroPageX),
-        OpCode::new(0x2F, "*RLA", 3, 6, AddressingMode::Absolute),
-        OpCode::new(0x3F, "*RLA", 3, 7, AddressingMode::AbsoluteX),
+        OpCode::new(0x2f, "*RLA", 3, 6, AddressingMode::Absolute),
+        OpCode::new(0x3f, "*RLA", 3, 7, AddressingMode::AbsoluteX),
         OpCode::new(0x3b, "*RLA", 3, 7, AddressingMode::AbsoluteY),
         OpCode::new(0x33, "*RLA", 2, 8, AddressingMode::IndirectY),
         OpCode::new(0x23, "*RLA", 2, 8, AddressingMode::IndirectX),
 
         OpCode::new(0x47, "*SRE", 2, 5, AddressingMode::ZeroPage),
         OpCode::new(0x57, "*SRE", 2, 6, AddressingMode::ZeroPageX),
-        OpCode::new(0x4F, "*SRE", 3, 6, AddressingMode::Absolute),
+        OpCode::new(0x4f, "*SRE", 3, 6, AddressingMode::Absolute),
         OpCode::new(0x5f, "*SRE", 3, 7, AddressingMode::AbsoluteX),
         OpCode::new(0x5b, "*SRE", 3, 7, AddressingMode::AbsoluteY),
         OpCode::new(0x43, "*SRE", 2, 8, AddressingMode::IndirectX),

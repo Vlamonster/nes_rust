@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub enum Mirroring {
     Vertical,
     Horizontal,
@@ -12,8 +13,8 @@ pub struct Rom {
 }
 
 impl Rom {
-    pub fn new(bytes: &Vec<u8>) -> Rom {
-        if &bytes[0..4] != [0x4E, 0x45, 0x53, 0x1A] {
+    pub fn new(bytes: &[u8]) -> Rom {
+        if bytes[0..4] != [0x4E, 0x45, 0x53, 0x1A] {
             panic!("File is not in iNES file format");
         }
 
@@ -64,12 +65,12 @@ pub mod test {
         let mut bytes = Vec::with_capacity(
             rom.header.len()
                 + rom.trainer.as_ref().unwrap_or(&vec![]).len()
-                + &rom.prg_rom.len()
-                + &rom.chr_rom.len(),
+                + rom.prg_rom.len()
+                + rom.chr_rom.len(),
         );
 
         bytes.extend(&rom.header);
-        bytes.extend(&rom.trainer.unwrap_or(vec![]));
+        bytes.extend(rom.trainer.unwrap_or_default());
         bytes.extend(&rom.prg_rom);
         bytes.extend(&rom.chr_rom);
 
@@ -85,7 +86,7 @@ pub mod test {
             ],
             trainer: None,
             prg_rom: program,
-            chr_rom: vec![0; 1 * 0x2000],
+            chr_rom: vec![0; 0x2000],
         });
 
         Rom::new(&test_rom)

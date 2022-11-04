@@ -45,11 +45,11 @@ pub enum AddressingMode {
 
 /// Trait that allows reading and writing 1 or 2 bytes from device.
 pub trait Mem {
-    fn read(&self, adr: u16) -> u8;
+    fn read(&mut self, adr: u16) -> u8;
 
     fn write(&mut self, adr: u16, val: u8);
 
-    fn read_address(&self, adr: u16) -> u16 {
+    fn read_address(&mut self, adr: u16) -> u16 {
         let lo = self.read(adr) as u16;
         let hi = self.read(adr + 1) as u16;
         (hi << 8) | (lo as u16)
@@ -64,7 +64,7 @@ pub trait Mem {
 }
 
 impl Mem for CPU {
-    fn read(&self, adr: u16) -> u8 {
+    fn read(&mut self, adr: u16) -> u8 {
         self.bus.read(adr)
     }
 
@@ -86,7 +86,7 @@ impl CPU {
         }
     }
 
-    pub fn get_effective_address(&self, mode: &AddressingMode, adr: u16) -> u16 {
+    pub fn get_effective_address(&mut self, mode: &AddressingMode, adr: u16) -> u16 {
         match mode {
             Immediate => adr,
             ZeroPage => self.read(adr) as u16,
@@ -144,7 +144,7 @@ impl CPU {
         }
     }
 
-    fn get_operand_address(&self, mode: &AddressingMode) -> u16 {
+    fn get_operand_address(&mut self, mode: &AddressingMode) -> u16 {
         self.get_effective_address(mode, self.pc)
     }
 
@@ -270,11 +270,11 @@ impl CPU {
                 0xa7 | 0xb7 | 0xaf | 0xbf | 0xa3 | 0xb3 => self.lax(&opcode.mode),
                 0x87 | 0x97 | 0x8f | 0x83 => self.sax(&opcode.mode),
                 0xeb => self.sbc(&opcode.mode),
-                0xc7 | 0xd7 | 0xCF | 0xdF | 0xdb | 0xd3 | 0xc3 => self.dcp(&opcode.mode),
+                0xc7 | 0xd7 | 0xcf | 0xdf | 0xdb | 0xd3 | 0xc3 => self.dcp(&opcode.mode),
                 0xe7 | 0xf7 | 0xef | 0xff | 0xfb | 0xe3 | 0xf3 => self.isb(&opcode.mode),
-                0x07 | 0x17 | 0x0F | 0x1f | 0x1b | 0x03 | 0x13 => self.slo(&opcode.mode),
-                0x27 | 0x37 | 0x2F | 0x3F | 0x3b | 0x33 | 0x23 => self.rla(&opcode.mode),
-                0x47 | 0x57 | 0x4F | 0x5f | 0x5b | 0x43 | 0x53 => self.sre(&opcode.mode),
+                0x07 | 0x17 | 0x0f | 0x1f | 0x1b | 0x03 | 0x13 => self.slo(&opcode.mode),
+                0x27 | 0x37 | 0x2f | 0x3f | 0x3b | 0x33 | 0x23 => self.rla(&opcode.mode),
+                0x47 | 0x57 | 0x4f | 0x5f | 0x5b | 0x43 | 0x53 => self.sre(&opcode.mode),
                 0x67 | 0x77 | 0x6f | 0x7f | 0x7b | 0x63 | 0x73 => self.rra(&opcode.mode),
                 _ => todo!("OpCode was parsed, but has not been implemented yet."),
             }
@@ -892,7 +892,7 @@ mod test {
 
     #[test]
     fn test_dec() {
-        let cpu = test_cpu(vec![0xce, 0x00, 0x00]);
+        let mut cpu = test_cpu(vec![0xce, 0x00, 0x00]);
         assert_eq!(cpu.read(0x0000), 0xff);
     }
 
@@ -916,7 +916,7 @@ mod test {
 
     #[test]
     fn test_inc() {
-        let cpu = test_cpu(vec![0xee, 0x00, 0x00]);
+        let mut cpu = test_cpu(vec![0xee, 0x00, 0x00]);
         assert_eq!(cpu.read(0x0000), 0x01);
     }
 
@@ -1002,7 +1002,7 @@ mod test {
     #[test]
     fn test_plp() {
         let cpu = test_cpu(vec![0x08, 0x78, 0x28]);
-        assert_eq!(cpu.p, 0x34);
+        assert_eq!(cpu.p, 0x24);
     }
 
     #[test]
@@ -1050,19 +1050,19 @@ mod test {
 
     #[test]
     fn test_sta() {
-        let cpu = test_cpu(vec![0xa9, 0x55, 0x8d, 0x00, 0x00]);
+        let mut cpu = test_cpu(vec![0xa9, 0x55, 0x8d, 0x00, 0x00]);
         assert_eq!(cpu.read(0x0000), 0x55);
     }
 
     #[test]
     fn test_stx() {
-        let cpu = test_cpu(vec![0xa2, 0x55, 0x8e, 0x00, 0x00]);
+        let mut cpu = test_cpu(vec![0xa2, 0x55, 0x8e, 0x00, 0x00]);
         assert_eq!(cpu.read(0x0000), 0x55);
     }
 
     #[test]
     fn test_sty() {
-        let cpu = test_cpu(vec![0xa0, 0x55, 0x8c, 0x00, 0x00]);
+        let mut cpu = test_cpu(vec![0xa0, 0x55, 0x8c, 0x00, 0x00]);
         assert_eq!(cpu.read(0x0000), 0x55);
     }
 
