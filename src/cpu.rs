@@ -17,14 +17,14 @@ const FLG_V: u8 = 0b0100_0000;
 const FLG_N: u8 = 0b1000_0000;
 
 /// Struct of the CPU, which contains all the registers and 64KB memory.
-pub struct CPU {
+pub struct CPU<'a> {
     pub a: u8,
     pub x: u8,
     pub y: u8,
     pub p: u8,
     pub s: u8,
     pub pc: u16,
-    pub bus: Bus,
+    pub bus: Bus<'a>,
 }
 
 #[derive(Debug)]
@@ -63,7 +63,7 @@ pub trait Mem {
     }
 }
 
-impl Mem for CPU {
+impl Mem for CPU<'_> {
     fn read(&mut self, adr: u16) -> u8 {
         self.bus.read(adr)
     }
@@ -73,8 +73,8 @@ impl Mem for CPU {
     }
 }
 
-impl CPU {
-    pub fn new(bus: Bus) -> Self {
+impl CPU<'_> {
+    pub fn new(bus: Bus) -> CPU {
         CPU {
             a: 0,
             x: 0,
@@ -779,13 +779,13 @@ mod test {
     use crate::cartridge::test::test_rom;
 
     /// Takes a vector of program memory and tests it starting from 0x8000.
-    fn test_cpu(program: Vec<u8>) -> CPU {
+    fn test_cpu(program: Vec<u8>) -> CPU<'static> {
         let program_size = program.len();
         let mut padded_program = program;
         padded_program.extend(vec![0; 2 * 0x4000 - program_size - 4]);
         padded_program.extend(vec![0x00, 0x80, 0x00, 0x00]);
 
-        let bus = Bus::new(test_rom(padded_program));
+        let bus = Bus::new(test_rom(padded_program), |_| {});
         let mut cpu = CPU::new(bus);
         cpu.reset();
         cpu.run(true, program_size as u64);

@@ -1,3 +1,5 @@
+use crate::ppu::PPU;
+
 const WIDTH: usize = 256;
 const HEIGHT: usize = 240;
 
@@ -71,6 +73,35 @@ pub const PALETTE: [(u8, u8, u8); 0x40] = [
     (0x11, 0x11, 0x11),
     (0x11, 0x11, 0x11),
 ];
+
+pub fn render(ppu: &PPU, frame: &mut Frame) {
+    let offset_rom = ppu.register_control.background_pattern_address();
+
+    // 0x0000..=0x03bf contains tiles, 0x003c0..=0x03ff contains palette
+    for i in 0x0000..=0x03bf {
+        let tile_index = ppu.vram[i] as u16;
+        let offset_x = i % 32;
+        let offset_y = i / 32;
+        let tile = &ppu.chr_rom[(offset_rom + tile_index * 16) as usize
+            ..=(offset_rom + tile_index * 16 + 15) as usize];
+
+        for y in 0..=7 {
+            let color_hi = tile[y].reverse_bits();
+            let color_lo = tile[y + 8].reverse_bits();
+
+            for x in 0..=7 {
+                let rgb = match ((color_hi >> x) & 1) << 1 | ((color_lo >> x) & 1) {
+                    0 => PALETTE[0x01],
+                    1 => PALETTE[0x23],
+                    2 => PALETTE[0x27],
+                    3 => PALETTE[0x30],
+                    _ => unreachable!(),
+                };
+                frame.set_pixel(offset_x * 8 + x, offset_y * 8 + y, rgb)
+            }
+        }
+    }
+}
 
 pub struct Frame {
     pub data: [u8; WIDTH * HEIGHT * 3],

@@ -8,7 +8,10 @@ mod ppu;
 mod render;
 mod trace;
 
+use crate::bus::Bus;
 use crate::cartridge::Rom;
+use crate::cpu::CPU;
+use crate::ppu::PPU;
 use crate::render::{Frame, PALETTE};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -45,7 +48,7 @@ fn show_tile_bank(chr_rom: &[u8], bank: u8) -> Frame {
                     1 => PALETTE[0x23],
                     2 => PALETTE[0x27],
                     3 => PALETTE[0x30],
-                    _ => panic!("can't be"),
+                    _ => unreachable!(),
                 };
                 frame.set_pixel(offset_x + x, offset_y + y, rgb)
             }
@@ -80,13 +83,16 @@ fn main() {
     let bytes: Vec<u8> = fs::read("pacman.nes").unwrap();
     let rom = Rom::new(&bytes);
 
-    let right_bank = show_tile_bank(&rom.chr_rom, 1);
+    let mut frame = Frame::new();
 
-    texture.update(None, &right_bank.data, 256 * 3).unwrap();
-    canvas.copy(&texture, None, None).unwrap();
-    canvas.present();
+    // the game cycle
+    let bus = Bus::new(rom, move |ppu: &PPU| {
+        render::render(ppu, &mut frame);
+        texture.update(None, &frame.data, 256 * 3).unwrap();
 
-    loop {
+        canvas.copy(&texture, None, None).unwrap();
+
+        canvas.present();
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -97,5 +103,10 @@ fn main() {
                 _ => { /* do nothing */ }
             }
         }
-    }
+    });
+
+    let mut cpu = CPU::new(bus);
+
+    cpu.reset();
+    cpu.run(false, 0);
 }

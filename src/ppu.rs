@@ -60,7 +60,7 @@ impl PPU {
             // Set vertical blank
             if self.scanline == 241 {
                 self.register_status.set_vertical_blank(true);
-                // todo self.register_status.set_sprite_zero_hit(false);
+                self.register_status.set_sprite_zero_hit(false);
                 if self.register_control.get_vertical_blank_nmi() {
                     self.nmi = true;
                 }
@@ -69,6 +69,8 @@ impl PPU {
             // Enter next frame and reset vertical blank
             if self.scanline >= 262 {
                 self.scanline = 0;
+                self.nmi = false;
+                self.register_status.set_sprite_zero_hit(false);
                 self.register_status.set_vertical_blank(false);
                 return true;
             }
@@ -136,6 +138,9 @@ impl PPU {
                 "addresses in 0x3000..=0x3eff are not expected, requested: {}",
                 adr
             ),
+            // 0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
+            //     self.palette_table[(adr - 0x10 - 0x3f00) as usize]
+            // } Is this true
             0x3f00..=0x3fff => self.palette_table[(adr - 0x3f00) as usize],
             _ => panic!(
                 "addresses in 0x4000..=0xffff are not expected, requested: {}",
@@ -146,16 +151,23 @@ impl PPU {
 
     pub fn write_data(&mut self, data: u8) {
         let adr = self.register_address.address;
+        self.increment_adr();
 
         match adr {
             0x0000..=0x1fff => panic!("Attempted to write to chr rom at {:#x}", adr),
             0x2000..=0x2fff => self.vram[self.vram_mirror_adr(adr) as usize] = data,
             0x3000..=0x3eff => panic!(
-                "addresses in 0x3000..=0x3eff are not expected, requested: {}",
+                "addresses in 0x3000..=0x3eff are not expected, requested: {:#x}",
                 adr
             ),
+            // 0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
+            //     self.palette_table[(adr - 0x10 - 0x3f00) as usize] = data;
+            // } Is this true?
+            0x3f00..=0x3fff => {
+                self.palette_table[(adr - 0x3f00) as usize] = data;
+            }
             _ => panic!(
-                "addresses in 0x4000..=0xffff are not expected, requested: {}",
+                "addresses in 0x4000..=0xffff are not expected, requested: {:#x}",
                 adr
             ),
         }
@@ -182,7 +194,7 @@ impl PPU {
         self.oam_address = self.oam_address.wrapping_add(1);
     }
 
-    fn write_oam_dma(&mut self, data: &[u8; 256]) {
+    pub fn write_oam_dma(&mut self, data: &[u8; 256]) {
         for value in data.iter() {
             self.oam_data[self.oam_address as usize] = *value;
             self.oam_address = self.oam_address.wrapping_add(1);
@@ -258,6 +270,14 @@ impl PpuControl {
         self.flags & 0b1000_0000 != 0
     }
 
+    pub fn background_pattern_address(&self) -> u16 {
+        if self.flags & 0b0001_0000 == 0 {
+            0x0000
+        } else {
+            0x1000
+        }
+    }
+
     pub fn update(&mut self, data: u8) {
         self.flags = data;
     }
@@ -282,6 +302,14 @@ impl PpuStatus {
 
     pub fn get_vertical_blank(&self) -> bool {
         self.flags & 0b1000_0000 != 0
+    }
+
+    pub fn set_sprite_zero_hit(&mut self, condition: bool) {
+        if condition {
+            self.flags |= 0b0100_0000;
+        } else {
+            self.flags &= !0b0100_0000;
+        }
     }
 }
 
