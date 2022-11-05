@@ -255,7 +255,7 @@ impl PpuControl {
     }
 
     pub fn get_vertical_blank_nmi(&self) -> bool {
-        self.flags & 0b1000_000 != 0
+        self.flags & 0b1000_0000 != 0
     }
 
     pub fn update(&mut self, data: u8) {

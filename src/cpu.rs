@@ -338,14 +338,14 @@ impl CPU {
             Implied => {
                 self.update_flag(FLG_C, self.a & 0b1000_0000 != 0);
 
-                self.a <<= 1;
+                self.a = self.a.wrapping_shl(1);
                 self.update_zn_flags(self.a);
             }
             _ => {
                 let adr = self.get_operand_address(mode);
                 let val = self.read(adr);
 
-                let res = val << 1;
+                let res = val.wrapping_shl(1);
 
                 self.update_flag(FLG_C, val & 0b1000_0000 != 0);
                 self.update_zn_flags(res);
@@ -563,14 +563,14 @@ impl CPU {
             Implied => {
                 self.update_flag(FLG_C, self.a & 0b0000_0001 != 0);
 
-                self.a >>= 1;
+                self.a = self.a.wrapping_shr(1);
                 self.update_zn_flags(self.a);
             }
             _ => {
                 let adr = self.get_operand_address(mode);
                 let val = self.read(adr);
 
-                let res = val >> 1;
+                let res = val.wrapping_shr(1);
 
                 self.update_flag(FLG_C, val & 0b0000_0001 != 0);
                 self.update_zn_flags(res);
@@ -612,7 +612,7 @@ impl CPU {
                 let flg_c = self.p & FLG_C;
                 self.update_flag(FLG_C, self.a & 0b1000_0000 != 0);
 
-                self.a <<= 1;
+                self.a = self.a.wrapping_shl(1);
                 self.a |= flg_c;
                 self.update_zn_flags(self.a);
             }
@@ -620,7 +620,7 @@ impl CPU {
                 let adr = self.get_operand_address(mode);
                 let val = self.read(adr);
 
-                let res = val << 1 | (self.p & FLG_C);
+                let res = val.wrapping_shl(1) | (self.p & FLG_C);
 
                 self.update_flag(FLG_C, val & 0b1000_0000 != 0);
                 self.update_zn_flags(res);
@@ -635,7 +635,7 @@ impl CPU {
                 let flg_c = self.p & FLG_C;
                 self.update_flag(FLG_C, self.a & 0b0000_0001 != 0);
 
-                self.a >>= 1;
+                self.a = self.a.wrapping_shr(1);
                 self.a |= flg_c << 7;
                 self.update_zn_flags(self.a);
             }
@@ -643,7 +643,7 @@ impl CPU {
                 let adr = self.get_operand_address(mode);
                 let val = self.read(adr);
 
-                let res = val >> 1 | (self.p & FLG_C) << 7;
+                let res = val.wrapping_shr(1) | (self.p & FLG_C) << 7;
 
                 self.update_flag(FLG_C, val & 0b0000_0001 != 0);
                 self.update_zn_flags(res);
