@@ -6,6 +6,7 @@ pub struct Bus {
     cpu_ram: [u8; 2048],
     prg_rom: Vec<u8>,
     ppu: PPU,
+    //cycles: u8,
 }
 
 impl Bus {
@@ -16,7 +17,17 @@ impl Bus {
             cpu_ram: [0; 0x0800],
             prg_rom: rom.prg_rom,
             ppu,
+            //cycles: 0,
         }
+    }
+
+    pub fn tick(&mut self, cycles: u8) {
+        //self.cycles += cycles;
+        self.ppu.tick(3 * cycles);
+    }
+
+    pub fn get_nmi(&mut self) -> bool {
+        self.ppu.get_nmi()
     }
 }
 

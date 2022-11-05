@@ -19,6 +19,9 @@ pub struct PPU {
     pub register_scroll: PpuScroll,
     pub register_address: PpuAddress,
     // todo pub register_oam_dma: PpuOamDma,
+    pub scanline: u16,
+    pub cycles: u16,
+    pub nmi: bool,
 }
 
 impl PPU {
@@ -40,15 +43,59 @@ impl PPU {
             register_scroll: PpuScroll::new(),
             register_address: PpuAddress::new(),
             // todo register_oam_dma: PpuOamDma::new(),
+            scanline: 0,
+            cycles: 0,
+            nmi: false,
         }
+    }
+
+    pub fn tick(&mut self, cycles: u8) -> bool {
+        self.cycles += cycles as u16;
+
+        // Enter next scanline
+        if self.cycles >= 341 {
+            self.cycles -= 341;
+            self.scanline += 1;
+
+            // Set vertical blank
+            if self.scanline == 241 {
+                self.register_status.set_vertical_blank(true);
+                // todo self.register_status.set_sprite_zero_hit(false);
+                if self.register_control.get_vertical_blank_nmi() {
+                    self.nmi = true;
+                }
+            }
+
+            // Enter next frame and reset vertical blank
+            if self.scanline >= 262 {
+                self.scanline = 0;
+                self.register_status.set_vertical_blank(false);
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn get_nmi(&mut self) -> bool {
+        let nmi = self.nmi;
+        self.nmi = false;
+        nmi
     }
 
     pub fn write_address(&mut self, data: u8) {
         self.register_address.update(data);
     }
 
+    /// Triggers NMI if the PPU is currently in vertical blank and the NMI flag changes from 0 to 1
     pub fn write_control(&mut self, data: u8) {
+        let nmi_flag_before = self.register_control.get_vertical_blank_nmi();
         self.register_control.update(data);
+        if !nmi_flag_before
+            && self.register_control.get_vertical_blank_nmi()
+            && self.register_status.get_vertical_blank()
+        {
+            self.nmi = true;
+        }
     }
 
     fn increment_adr(&mut self) {
@@ -122,15 +169,15 @@ impl PPU {
         data
     }
 
-    pub fn write_oam_address(&mut self, data: u8){
+    pub fn write_oam_address(&mut self, data: u8) {
         self.oam_address = data;
     }
 
-    pub fn read_oam_data(&mut self) -> u8{
+    pub fn read_oam_data(&mut self) -> u8 {
         self.oam_data[self.oam_address as usize]
     }
 
-    pub fn write_oam_data(&mut self, data: u8){
+    pub fn write_oam_data(&mut self, data: u8) {
         self.oam_data[self.oam_address as usize] = data;
         self.oam_address = self.oam_address.wrapping_add(1);
     }
@@ -142,11 +189,11 @@ impl PPU {
         }
     }
 
-    pub fn write_mask(&mut self, data: u8){
+    pub fn write_mask(&mut self, data: u8) {
         self.register_mask.update(data);
     }
 
-    pub fn write_scroll(&mut self, data: u8){
+    pub fn write_scroll(&mut self, data: u8) {
         self.register_scroll.update(data);
     }
 }
@@ -207,6 +254,10 @@ impl PpuControl {
         }
     }
 
+    pub fn get_vertical_blank_nmi(&self) -> bool {
+        self.flags & 0b1000_000 != 0
+    }
+
     pub fn update(&mut self, data: u8) {
         self.flags = data;
     }
@@ -228,39 +279,43 @@ impl PpuStatus {
             self.flags &= !0b1000_0000;
         }
     }
+
+    pub fn get_vertical_blank(&self) -> bool {
+        self.flags & 0b1000_0000 != 0
+    }
 }
 
-pub struct PpuMask{
+pub struct PpuMask {
     flags: u8,
 }
 
-impl PpuMask{
+impl PpuMask {
     pub fn new() -> Self {
         PpuMask { flags: 0x00 }
     }
 
-    pub fn update(&mut self, data: u8){
+    pub fn update(&mut self, data: u8) {
         self.flags = data;
     }
 }
 
-pub struct PpuScroll{
+pub struct PpuScroll {
     pub x: u8,
     pub y: u8,
     pub x_next: bool,
 }
 
-impl PpuScroll{
-    pub fn new() -> Self{
-        PpuScroll{
+impl PpuScroll {
+    pub fn new() -> Self {
+        PpuScroll {
             x: 0,
             y: 0,
             x_next: true,
         }
     }
 
-    pub fn update(&mut self, data: u8){
-        if self.x_next{
+    pub fn update(&mut self, data: u8) {
+        if self.x_next {
             self.x = data;
         } else {
             self.y = data;
@@ -268,7 +323,7 @@ impl PpuScroll{
         self.x_next = !self.x_next;
     }
 
-    pub fn reset_latch(&mut self){
+    pub fn reset_latch(&mut self) {
         self.x_next = true;
     }
 }

@@ -194,18 +194,27 @@ impl CPU {
         let mut run_time = max_time;
 
         while !timeout || run_time > 0 {
+            // Check for NMI
+            if self.bus.get_nmi() {
+                self.nmi();
+            }
+
+            // Call provided callback, useful for printing process trace for example
             callback(self);
 
+            // Fetch opcode and increment program counter
             let code = self.read(self.pc);
             self.pc += 1;
-            let program_counter_state = self.pc;
+            let pc_before_instruction = self.pc;
 
             let opcode = opcodes
                 .get(&code)
                 .unwrap_or_else(|| panic!("OpCode {:x} is not recognized", code));
 
+            // Decrement allowed run-time
             run_time = run_time.wrapping_sub(opcode.len as u64);
 
+            // Execute instruction
             match code {
                 0x69 | 0x65 | 0x75 | 0x6d | 0x7d | 0x79 | 0x61 | 0x71 => self.adc(&opcode.mode),
                 0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => self.and(&opcode.mode),
@@ -279,10 +288,27 @@ impl CPU {
                 _ => todo!("OpCode was parsed, but has not been implemented yet."),
             }
 
-            if program_counter_state == self.pc {
+            // Hand over control to bus
+            self.bus.tick(opcode.cycles);
+
+            // Increment program counter unless altered by instruction
+            if pc_before_instruction == self.pc {
                 self.pc += (opcode.len - 1) as u16;
             }
         }
+    }
+
+    fn nmi(&mut self) {
+        // Push program counter and status register on stack
+        self.stack_push((self.pc >> 8) as u8);
+        self.stack_push((self.pc & 0x00ff) as u8);
+        self.stack_push(self.p & !FLG_B | FLG_U);
+
+        // Disable interrupts
+        self.update_flag(FLG_I, true);
+
+        // Load nmi address into program counter
+        self.pc = self.read_address(0xfffa);
     }
 
     fn adc(&mut self, mode: &AddressingMode) {
