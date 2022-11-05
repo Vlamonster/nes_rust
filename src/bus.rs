@@ -25,8 +25,8 @@ impl Mem for Bus {
         match adr {
             0x0000..=0x1fff => self.cpu_ram[adr as usize & 0x07ff],
             0x2000..=0x3fff => match adr & 0x2007 {
-                0x2002 => todo!("read from status not implemented yet"),
-                0x2004 => todo!("read from oam data not implemented yet"),
+                0x2002 => self.ppu.read_status(),
+                0x2004 => self.ppu.read_oam_data(),
                 0x2007 => self.ppu.read_data(),
                 _ => panic!("Attempted to read from write-only PPU register {:x}", adr),
             },
@@ -49,15 +49,22 @@ impl Mem for Bus {
             0x0000..=0x1fff => {
                 self.cpu_ram[adr as usize & 0x07ff] = data;
             }
-            0x2000..=0x3fff => {
-                let _mirror_down_adr = adr & 0x2007;
-                todo!("PPU is not supported yet");
-            }
+            0x2000..=0x3fff => match adr & 0x2007 {
+                0x2000 => self.ppu.write_control(data),
+                0x2001 => self.ppu.write_mask(data),
+                0x2002 => panic!("Attempted to write to PPU status register"),
+                0x2003 => self.ppu.write_oam_address(data),
+                0x2004 => self.ppu.write_oam_data(data),
+                0x2005 => todo!("write to scr not implemented yet"),
+                0x2006 => self.ppu.write_address(data),
+                0x2007 => self.ppu.write_data(data),
+                _ => unreachable!(),
+            },
             0x8000..=0xffff => {
-                panic!("Attempt to write to Cartridge ROM space")
+                panic!("Attempted to write to Cartridge ROM space")
             }
             _ => {
-                println!("Ignoring mem write-access at {}", adr);
+                println!("Ignoring mem write-access at {:#x}", adr);
             }
         }
     }
