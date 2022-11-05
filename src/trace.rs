@@ -135,7 +135,7 @@ mod test {
         padded_program.extend(vec![0; 2 * 0x4000 - program_size - 4]);
         padded_program.extend(vec![0x00, 0x80, 0x00, 0x00]);
 
-        let bus = Bus::new(test_rom(padded_program), |_| {});
+        let bus = Bus::new(test_rom(padded_program), |_, _| {});
         let mut cpu = CPU::new(bus);
         cpu.reset();
         cpu.run_with_callback(

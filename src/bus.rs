@@ -1,19 +1,21 @@
 use crate::cartridge::Rom;
 use crate::cpu::Mem;
+use crate::joypad::Joypad;
 use crate::ppu::PPU;
 
 pub struct Bus<'call> {
     cpu_ram: [u8; 0x0800],
     prg_rom: Vec<u8>,
     ppu: PPU,
+    joypad_1: Joypad,
 
-    callback: Box<dyn FnMut(&PPU) + 'call>,
+    callback: Box<dyn FnMut(&PPU, &mut Joypad) + 'call>,
 }
 
 impl<'a> Bus<'a> {
-    pub fn new<'call, F>(rom: Rom, gameloop_callback: F) -> Bus<'call>
+    pub fn new<'call, F>(rom: Rom, callback: F) -> Bus<'call>
     where
-        F: FnMut(&PPU) + 'call,
+        F: FnMut(&PPU, &mut Joypad) + 'call,
     {
         let ppu = PPU::new(rom.chr_rom, rom.screen_mirroring);
 
@@ -21,8 +23,9 @@ impl<'a> Bus<'a> {
             cpu_ram: [0; 0x0800],
             prg_rom: rom.prg_rom,
             ppu,
+            joypad_1: Joypad::new(),
 
-            callback: Box::from(gameloop_callback),
+            callback: Box::from(callback),
         }
     }
 
@@ -33,7 +36,7 @@ impl<'a> Bus<'a> {
         let nmi_after = self.ppu.nmi;
 
         if !nmi_before && nmi_after {
-            (self.callback)(&self.ppu);
+            (self.callback)(&self.ppu, &mut self.joypad_1);
         }
     }
 
@@ -56,10 +59,7 @@ impl Mem for Bus<'_> {
                 // todo implement APU, return 0 for now
                 0
             }
-            0x4016 => {
-                // todo implement joy pad 1 read, return 0 for now
-                0
-            }
+            0x4016 => self.joypad_1.read(),
             0x4017 => {
                 // todo implement joy pad 2 read, return 0 for now
                 0
@@ -106,9 +106,7 @@ impl Mem for Bus<'_> {
 
                 self.ppu.write_oam_dma(&buffer);
             }
-            0x4016 => {
-                // ignore joy pad 1
-            }
+            0x4016 => self.joypad_1.write(data),
             0x4017 => {
                 // ignore joy pad 2
             }
@@ -129,7 +127,7 @@ mod test {
 
     #[test]
     fn test_read_write_ram() {
-        let mut bus = Bus::new(test_rom(vec![0; 0x8000]), |_| {});
+        let mut bus = Bus::new(test_rom(vec![0; 0x8000]), |_, _| {});
         bus.write(0x01, 0x55);
         assert_eq!(bus.read(0x01), 0x55);
     }

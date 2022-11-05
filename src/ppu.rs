@@ -138,9 +138,7 @@ impl PPU {
                 "addresses in 0x3000..=0x3eff are not expected, requested: {}",
                 adr
             ),
-            // 0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
-            //     self.palette_table[(adr - 0x10 - 0x3f00) as usize]
-            // } Is this true
+            0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => self.palette_table[(adr - 0x10 - 0x3f00) as usize],
             0x3f00..=0x3fff => self.palette_table[(adr - 0x3f00) as usize],
             _ => panic!(
                 "addresses in 0x4000..=0xffff are not expected, requested: {}",
@@ -160,9 +158,9 @@ impl PPU {
                 "addresses in 0x3000..=0x3eff are not expected, requested: {:#x}",
                 adr
             ),
-            // 0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
-            //     self.palette_table[(adr - 0x10 - 0x3f00) as usize] = data;
-            // } Is this true?
+            0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
+                self.palette_table[(adr - 0x10 - 0x3f00) as usize] = data;
+            }
             0x3f00..=0x3fff => {
                 self.palette_table[(adr - 0x3f00) as usize] = data;
             }
@@ -272,6 +270,14 @@ impl PpuControl {
 
     pub fn background_pattern_address(&self) -> u16 {
         if self.flags & 0b0001_0000 == 0 {
+            0x0000
+        } else {
+            0x1000
+        }
+    }
+
+    pub fn sprite_pattern_address(&self) -> u16 {
+        if self.flags & 0b0000_1000 == 0 {
             0x0000
         } else {
             0x1000

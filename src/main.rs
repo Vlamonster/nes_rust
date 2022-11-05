@@ -3,6 +3,7 @@
 mod bus;
 mod cartridge;
 pub mod cpu;
+mod joypad;
 pub mod opcodes;
 mod ppu;
 mod render;
@@ -11,11 +12,16 @@ mod trace;
 use crate::bus::Bus;
 use crate::cartridge::Rom;
 use crate::cpu::CPU;
+use crate::joypad::{
+    Joypad, JOYPAD_A, JOYPAD_B, JOYPAD_DOWN, JOYPAD_LEFT, JOYPAD_RIGHT, JOYPAD_SELECT,
+    JOYPAD_START, JOYPAD_UP,
+};
 use crate::ppu::PPU;
 use crate::render::{Frame, PALETTE};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
+use std::collections::HashMap;
 use std::fs;
 
 fn show_tile_bank(chr_rom: &[u8], bank: u8) -> Frame {
@@ -80,13 +86,23 @@ fn main() {
         .unwrap();
 
     //load the game
-    let bytes: Vec<u8> = fs::read("pacman.nes").unwrap();
+    let bytes: Vec<u8> = fs::read("nestest.nes").unwrap();
     let rom = Rom::new(&bytes);
 
     let mut frame = Frame::new();
 
+    let mut key_map = HashMap::new();
+    key_map.insert(Keycode::Down, JOYPAD_DOWN);
+    key_map.insert(Keycode::Up, JOYPAD_UP);
+    key_map.insert(Keycode::Right, JOYPAD_RIGHT);
+    key_map.insert(Keycode::Left, JOYPAD_LEFT);
+    key_map.insert(Keycode::Space, JOYPAD_SELECT);
+    key_map.insert(Keycode::Return, JOYPAD_START);
+    key_map.insert(Keycode::A, JOYPAD_A);
+    key_map.insert(Keycode::S, JOYPAD_B);
+
     // the game cycle
-    let bus = Bus::new(rom, move |ppu: &PPU| {
+    let bus = Bus::new(rom, move |ppu: &PPU, joypad: &mut Joypad| {
         render::render(ppu, &mut frame);
         texture.update(None, &frame.data, 256 * 3).unwrap();
 
@@ -100,6 +116,18 @@ fn main() {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => std::process::exit(0),
+
+                Event::KeyDown { keycode, .. } => {
+                    if let Some(key) = key_map.get(&keycode.unwrap_or(Keycode::Ampersand)) {
+                        joypad.set_button_pressed_status(*key, true);
+                    }
+                }
+                Event::KeyUp { keycode, .. } => {
+                    if let Some(key) = key_map.get(&keycode.unwrap_or(Keycode::Ampersand)) {
+                        joypad.set_button_pressed_status(*key, false);
+                    }
+                }
+
                 _ => { /* do nothing */ }
             }
         }
