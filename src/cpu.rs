@@ -86,27 +86,29 @@ impl CPU<'_> {
         }
     }
 
-    pub fn get_effective_address(&mut self, mode: &AddressingMode, adr: u16) -> u16 {
+    pub fn get_effective_address(&mut self, mode: &AddressingMode, adr: u16) -> (u16, bool) {
         match mode {
-            Immediate => adr,
-            ZeroPage => self.read(adr) as u16,
-            Absolute => self.read_address(adr),
+            Immediate => (adr, false),
+            ZeroPage => (self.read(adr) as u16, false),
+            Absolute => (self.read_address(adr), false),
             ZeroPageX => {
                 let pos = self.read(adr);
-                pos.wrapping_add(self.x) as u16
+                (pos.wrapping_add(self.x) as u16, false)
             }
             ZeroPageY => {
                 let pos = self.read(adr);
-                pos.wrapping_add(self.y) as u16
+                (pos.wrapping_add(self.y) as u16, false)
             }
 
             AbsoluteX => {
                 let base = self.read_address(adr);
-                base.wrapping_add(self.x as u16)
+                let adr = base.wrapping_add(self.x as u16);
+                (adr, base & 0xff00 != adr & 0xff00)
             }
             AbsoluteY => {
                 let base = self.read_address(adr);
-                base.wrapping_add(self.y as u16)
+                let adr = base.wrapping_add(self.y as u16);
+                (adr, base & 0xff00 != adr & 0xff00)
             }
             Indirect => {
                 let ptr = self.read_address(adr);
@@ -119,7 +121,7 @@ impl CPU<'_> {
                 } else {
                     self.read(ptr.wrapping_add(1))
                 };
-                (hi as u16) << 8 | (lo as u16)
+                ((hi as u16) << 8 | (lo as u16), false)
             }
             IndirectX => {
                 let base = self.read(adr);
@@ -127,7 +129,7 @@ impl CPU<'_> {
                 let ptr: u8 = (base as u8).wrapping_add(self.x);
                 let lo = self.read(ptr as u16);
                 let hi = self.read(ptr.wrapping_add(1) as u16);
-                (hi as u16) << 8 | (lo as u16)
+                ((hi as u16) << 8 | (lo as u16), false)
             }
             IndirectY => {
                 let base = self.read(adr);
@@ -135,7 +137,8 @@ impl CPU<'_> {
                 let lo = self.read(base as u16);
                 let hi = self.read((base as u8).wrapping_add(1) as u16);
                 let deref_base = (hi as u16) << 8 | (lo as u16);
-                deref_base.wrapping_add(self.y as u16)
+                let deref = deref_base.wrapping_add(self.y as u16);
+                (deref, deref_base & 0xff00 != deref & 0xff00)
             }
 
             Implied => {
@@ -144,7 +147,7 @@ impl CPU<'_> {
         }
     }
 
-    fn get_operand_address(&mut self, mode: &AddressingMode) -> u16 {
+    fn get_operand_address(&mut self, mode: &AddressingMode) -> (u16, bool) {
         self.get_effective_address(mode, self.pc)
     }
 
@@ -169,6 +172,21 @@ impl CPU<'_> {
     fn stack_pop(&mut self) -> u8 {
         self.s = self.s.wrapping_add(1);
         self.read(0x0100 | self.s as u16)
+    }
+
+    fn branch(&mut self, condition: bool) {
+        if condition {
+            self.bus.tick(1);
+
+            let jmp_offset = self.read(self.pc) as i8;
+            let jmp_address = ((self.pc as i16) + jmp_offset as i16 + 1) as u16;
+
+            if self.pc.wrapping_add(1) & 0xff00 != jmp_address & 0xff00 {
+                self.bus.tick(1);
+            }
+
+            self.pc = jmp_address;
+        }
     }
 
     pub fn reset(&mut self) {
@@ -204,6 +222,13 @@ impl CPU<'_> {
 
             // Fetch opcode and increment program counter
             let code = self.read(self.pc);
+
+            // println!("{:#x}", self.pc);
+            // println!("{:#x}, {:#x}", self.pc, code);
+            // if self.pc == 0xc240 {
+            //      println!("opcode: {:#x}", code);
+            // }
+
             self.pc += 1;
             let pc_before_instruction = self.pc;
 
@@ -249,7 +274,7 @@ impl CPU<'_> {
                 0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => self.ldx(&opcode.mode),
                 0xa0 | 0xa4 | 0xb4 | 0xac | 0xbc => self.ldy(&opcode.mode),
                 0x4a | 0x46 | 0x56 | 0x4e | 0x5e => self.lsr(&opcode.mode),
-                0xea => self.nop(),
+                0xea => self.nop(&opcode.mode),
                 0x09 | 0x05 | 0x15 | 0x0d | 0x1d | 0x19 | 0x01 | 0x11 => self.ora(&opcode.mode),
                 0x48 => self.pha(),
                 0x08 => self.php(),
@@ -275,7 +300,7 @@ impl CPU<'_> {
                 // illegal opcodes
                 0x1a | 0x3a | 0x5a | 0x7a | 0xda | 0xfa | 0x80 | 0x82 | 0x89 | 0xc2 | 0xe2
                 | 0x04 | 0x44 | 0x64 | 0x14 | 0x34 | 0x54 | 0x74 | 0xd4 | 0xf4 | 0x0c | 0x1c
-                | 0x3c | 0x5c | 0x7c | 0xdc | 0xfc => self.nop(),
+                | 0x3c | 0x5c | 0x7c | 0xdc | 0xfc => self.nop(&opcode.mode),
                 0xa7 | 0xb7 | 0xaf | 0xbf | 0xa3 | 0xb3 => self.lax(&opcode.mode),
                 0x87 | 0x97 | 0x8f | 0x83 => self.sax(&opcode.mode),
                 0xeb => self.sbc(&opcode.mode),
@@ -307,12 +332,17 @@ impl CPU<'_> {
         // Disable interrupts
         self.update_flag(FLG_I, true);
 
+        self.bus.tick(2);
+
         // Load nmi address into program counter
         self.pc = self.read_address(0xfffa);
     }
 
     fn adc(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, page_cross) = self.get_operand_address(mode);
+        if page_cross {
+            self.bus.tick(1)
+        }
         let val = self.read(adr);
 
         let (tmp, c1) = self.a.overflowing_add(val);
@@ -326,7 +356,10 @@ impl CPU<'_> {
     }
 
     fn and(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, page_cross) = self.get_operand_address(mode);
+        if page_cross {
+            self.bus.tick(1)
+        }
         let val = self.read(adr);
 
         self.a &= val;
@@ -342,7 +375,7 @@ impl CPU<'_> {
                 self.update_zn_flags(self.a);
             }
             _ => {
-                let adr = self.get_operand_address(mode);
+                let (adr, _) = self.get_operand_address(mode);
                 let val = self.read(adr);
 
                 let res = val.wrapping_shl(1);
@@ -355,28 +388,19 @@ impl CPU<'_> {
     }
 
     fn bcc(&mut self) {
-        if self.p & FLG_C == 0 {
-            let offset = self.read(self.pc) as i8;
-            self.pc = ((self.pc as i16) + offset as i16 + 1) as u16;
-        }
+        self.branch(self.p & FLG_C == 0);
     }
 
     fn bcs(&mut self) {
-        if self.p & FLG_C != 0 {
-            let offset = self.read(self.pc) as i8;
-            self.pc = ((self.pc as i16) + offset as i16 + 1) as u16;
-        }
+        self.branch(self.p & FLG_C != 0);
     }
 
     fn beq(&mut self) {
-        if self.p & FLG_Z != 0 {
-            let offset = self.read(self.pc) as i8;
-            self.pc = ((self.pc as i16) + offset as i16 + 1) as u16;
-        }
+        self.branch(self.p & FLG_Z != 0);
     }
 
     fn bit(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, _) = self.get_operand_address(mode);
         let val = self.read(adr);
 
         self.update_flag(FLG_Z, self.a & val == 0);
@@ -385,24 +409,15 @@ impl CPU<'_> {
     }
 
     fn bmi(&mut self) {
-        if self.p & FLG_N != 0 {
-            let offset = self.read(self.pc) as i8;
-            self.pc = ((self.pc as i16) + offset as i16 + 1) as u16;
-        }
+        self.branch(self.p & FLG_N != 0);
     }
 
     fn bne(&mut self) {
-        if self.p & FLG_Z == 0 {
-            let offset = self.read(self.pc) as i8;
-            self.pc = ((self.pc as i16) + offset as i16 + 1) as u16;
-        }
+        self.branch(self.p & FLG_Z == 0);
     }
 
     fn bpl(&mut self) {
-        if self.p & FLG_N == 0 {
-            let offset = self.read(self.pc) as i8;
-            self.pc = ((self.pc as i16) + offset as i16 + 1) as u16;
-        }
+        self.branch(self.p & FLG_N == 0);
     }
 
     fn brk(&mut self) {
@@ -416,17 +431,11 @@ impl CPU<'_> {
     }
 
     fn bvc(&mut self) {
-        if self.p & FLG_V == 0 {
-            let offset = self.read(self.pc) as i8;
-            self.pc = ((self.pc as i16) + offset as i16 + 1) as u16;
-        }
+        self.branch(self.p & FLG_V == 0);
     }
 
     fn bvs(&mut self) {
-        if self.p & FLG_V != 0 {
-            let offset = self.read(self.pc) as i8;
-            self.pc = ((self.pc as i16) + offset as i16 + 1) as u16;
-        }
+        self.branch(self.p & FLG_V != 0);
     }
 
     fn clc(&mut self) {
@@ -446,7 +455,10 @@ impl CPU<'_> {
     }
 
     fn cmp(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, page_cross) = self.get_operand_address(mode);
+        if page_cross {
+            self.bus.tick(1)
+        }
         let val = self.read(adr);
 
         self.update_flag(FLG_C, self.a >= val);
@@ -455,7 +467,7 @@ impl CPU<'_> {
     }
 
     fn cpx(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, _) = self.get_operand_address(mode);
         let val = self.read(adr);
 
         self.update_flag(FLG_C, self.x >= val);
@@ -464,7 +476,7 @@ impl CPU<'_> {
     }
 
     fn cpy(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, _) = self.get_operand_address(mode);
         let val = self.read(adr);
 
         self.update_flag(FLG_C, self.y >= val);
@@ -473,7 +485,7 @@ impl CPU<'_> {
     }
 
     fn dec(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, _) = self.get_operand_address(mode);
         let val = self.read(adr);
 
         let res = val.wrapping_sub(1);
@@ -493,7 +505,10 @@ impl CPU<'_> {
     }
 
     fn eor(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, page_cross) = self.get_operand_address(mode);
+        if page_cross {
+            self.bus.tick(1)
+        }
         let val = self.read(adr);
 
         self.a ^= val;
@@ -501,7 +516,7 @@ impl CPU<'_> {
     }
 
     fn inc(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, _) = self.get_operand_address(mode);
         let val = self.read(adr);
 
         let res = val.wrapping_add(1);
@@ -521,12 +536,12 @@ impl CPU<'_> {
     }
 
     fn jmp(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, _) = self.get_operand_address(mode);
         self.pc = adr;
     }
 
     fn jsr(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, _) = self.get_operand_address(mode);
 
         self.stack_push(((self.pc + 1) >> 8) as u8);
         self.stack_push(((self.pc + 1) & 0x00ff) as u8);
@@ -535,7 +550,10 @@ impl CPU<'_> {
     }
 
     fn lda(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, page_cross) = self.get_operand_address(mode);
+        if page_cross {
+            self.bus.tick(1)
+        }
         let val = self.read(adr);
 
         self.a = val;
@@ -543,7 +561,10 @@ impl CPU<'_> {
     }
 
     fn ldx(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, page_cross) = self.get_operand_address(mode);
+        if page_cross {
+            self.bus.tick(1)
+        }
         let val = self.read(adr);
 
         self.x = val;
@@ -551,7 +572,10 @@ impl CPU<'_> {
     }
 
     fn ldy(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, page_cross) = self.get_operand_address(mode);
+        if page_cross {
+            self.bus.tick(1)
+        }
         let val = self.read(adr);
 
         self.y = val;
@@ -567,7 +591,10 @@ impl CPU<'_> {
                 self.update_zn_flags(self.a);
             }
             _ => {
-                let adr = self.get_operand_address(mode);
+                let (adr, page_cross) = self.get_operand_address(mode);
+                if page_cross {
+                    self.bus.tick(1)
+                }
                 let val = self.read(adr);
 
                 let res = val.wrapping_shr(1);
@@ -579,10 +606,23 @@ impl CPU<'_> {
         }
     }
 
-    fn nop(&mut self) {}
+    fn nop(&mut self, mode: &AddressingMode) {
+        match mode {
+            Implied => (),
+            _ => {
+                let (_, page_cross) = self.get_operand_address(mode);
+                if page_cross {
+                    self.bus.tick(1)
+                }
+            }
+        }
+    }
 
     fn ora(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, page_cross) = self.get_operand_address(mode);
+        if page_cross {
+            self.bus.tick(1)
+        }
         let val = self.read(adr);
 
         self.a |= val;
@@ -617,7 +657,7 @@ impl CPU<'_> {
                 self.update_zn_flags(self.a);
             }
             _ => {
-                let adr = self.get_operand_address(mode);
+                let (adr, _) = self.get_operand_address(mode);
                 let val = self.read(adr);
 
                 let res = val.wrapping_shl(1) | (self.p & FLG_C);
@@ -640,7 +680,7 @@ impl CPU<'_> {
                 self.update_zn_flags(self.a);
             }
             _ => {
-                let adr = self.get_operand_address(mode);
+                let (adr, _) = self.get_operand_address(mode);
                 let val = self.read(adr);
 
                 let res = val.wrapping_shr(1) | (self.p & FLG_C) << 7;
@@ -662,7 +702,10 @@ impl CPU<'_> {
     }
 
     fn sbc(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, page_cross) = self.get_operand_address(mode);
+        if page_cross {
+            self.bus.tick(1)
+        }
         let val = !self.read(adr);
 
         let (tmp, c1) = self.a.overflowing_add(val);
@@ -688,17 +731,17 @@ impl CPU<'_> {
     }
 
     fn sta(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, _) = self.get_operand_address(mode);
         self.write(adr, self.a);
     }
 
     fn stx(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, _) = self.get_operand_address(mode);
         self.write(adr, self.x);
     }
 
     fn sty(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, _) = self.get_operand_address(mode);
 
         self.write(adr, self.y);
     }
@@ -733,43 +776,115 @@ impl CPU<'_> {
     }
 
     fn lax(&mut self, mode: &AddressingMode) {
-        self.lda(mode);
-        self.ldx(mode);
+        let (adr, page_cross) = self.get_operand_address(mode);
+        if page_cross {
+            self.bus.tick(1)
+        }
+        let val = self.read(adr);
+
+        self.a = val;
+        self.x = val;
+        self.update_zn_flags(self.a);
     }
 
     fn sax(&mut self, mode: &AddressingMode) {
-        let adr = self.get_operand_address(mode);
+        let (adr, _) = self.get_operand_address(mode);
         self.write(adr, self.a & self.x);
     }
 
     fn dcp(&mut self, mode: &AddressingMode) {
         self.dec(mode);
-        self.cmp(mode);
+
+        // cmp
+        let (adr, _) = self.get_operand_address(mode);
+        let val = self.read(adr);
+
+        self.update_flag(FLG_C, self.a >= val);
+        self.update_flag(FLG_Z, self.a == val);
+        self.update_flag(FLG_N, self.a.wrapping_sub(val) & FLG_N != 0);
     }
 
     fn isb(&mut self, mode: &AddressingMode) {
         self.inc(mode);
-        self.sbc(mode);
+
+        // sbc
+        let (adr, _) = self.get_operand_address(mode);
+        let val = !self.read(adr);
+
+        let (tmp, c1) = self.a.overflowing_add(val);
+        let (res, c2) = tmp.overflowing_add(self.p & 0x01);
+
+        self.update_zn_flags(res);
+        self.update_flag(FLG_C, c1 || c2);
+        self.update_flag(FLG_V, (self.a ^ res) & (val ^ res) & FLG_N != 0);
+
+        self.a = res;
     }
 
     fn slo(&mut self, mode: &AddressingMode) {
         self.asl(mode);
-        self.ora(mode);
+
+        // ora
+        let (adr, _) = self.get_operand_address(mode);
+        let val = self.read(adr);
+
+        self.a |= val;
+        self.update_zn_flags(self.a);
     }
 
     fn rla(&mut self, mode: &AddressingMode) {
         self.rol(mode);
-        self.and(mode);
+
+        // and
+        let (adr, _) = self.get_operand_address(mode);
+        let val = self.read(adr);
+
+        self.a &= val;
+        self.update_zn_flags(self.a);
     }
 
     fn sre(&mut self, mode: &AddressingMode) {
-        self.lsr(mode);
-        self.eor(mode);
+        // lsr
+        match mode {
+            Implied => {
+                self.update_flag(FLG_C, self.a & 0b0000_0001 != 0);
+
+                self.a = self.a.wrapping_shr(1);
+            }
+            _ => {
+                let (adr, _) = self.get_operand_address(mode);
+                let val = self.read(adr);
+
+                let res = val.wrapping_shr(1);
+
+                self.update_flag(FLG_C, val & 0b0000_0001 != 0);
+                self.write(adr, res);
+            }
+        }
+
+        // eor
+        let (adr, _) = self.get_operand_address(mode);
+        let val = self.read(adr);
+
+        self.a ^= val;
+        self.update_zn_flags(self.a);
     }
 
     fn rra(&mut self, mode: &AddressingMode) {
         self.ror(mode);
-        self.adc(mode);
+
+        // adc
+        let (adr, _) = self.get_operand_address(mode);
+        let val = self.read(adr);
+
+        let (tmp, c1) = self.a.overflowing_add(val);
+        let (res, c2) = tmp.overflowing_add(self.p & 0x01);
+
+        self.update_zn_flags(res);
+        self.update_flag(FLG_C, c1 || c2);
+        self.update_flag(FLG_V, (self.a ^ res) & (val ^ res) & FLG_N != 0);
+
+        self.a = res;
     }
 }
 

@@ -17,7 +17,7 @@ pub fn trace(cpu: &mut CPU) -> String {
     let (adr, val) = match opcode.mode {
         AddressingMode::Immediate | AddressingMode::Implied => (0, 0),
         _ => {
-            let adr = cpu.get_effective_address(&opcode.mode, begin + 1);
+            let (adr, _) = cpu.get_effective_address(&opcode.mode, begin + 1);
             (adr, cpu.read(adr))
         }
     };
@@ -116,8 +116,8 @@ pub fn trace(cpu: &mut CPU) -> String {
     .trim()
     .to_string();
     format!(
-        "{:47} A:{:02x} X:{:02x} Y:{:02x} P:{:02x} SP:{:02x}",
-        asm_str, cpu.a, cpu.x, cpu.y, cpu.p, cpu.s,
+        "{:47} A:{:02x} X:{:02x} Y:{:02x} P:{:02x} SP:{:02x} PPU:{:3},{:3}",
+        asm_str, cpu.a, cpu.x, cpu.y, cpu.p, cpu.s, cpu.bus.ppu.scanline, cpu.bus.ppu.cycles
     )
     .to_ascii_uppercase()
 }

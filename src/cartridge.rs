@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Mirroring {
     Vertical,
     Horizontal,
@@ -90,5 +90,58 @@ pub mod test {
         });
 
         Rom::new(&test_rom)
+    }
+
+    #[test]
+    fn test() {
+        let test_rom = create_rom(TestRom {
+            header: vec![
+                0x4E, 0x45, 0x53, 0x1A, 0x02, 0x01, 0x31, 00, 00, 00, 00, 00, 00, 00, 00, 00,
+            ],
+            trainer: None,
+            prg_rom: vec![1; 2 * 0x4000],
+            chr_rom: vec![2; 1 * 0x2000],
+        });
+
+        let rom: Rom = Rom::new(&test_rom);
+
+        assert_eq!(rom.chr_rom, vec!(2; 1 * 0x2000));
+        assert_eq!(rom.prg_rom, vec!(1; 2 * 0x4000));
+        assert_eq!(rom.mapper_id, 3);
+        assert_eq!(rom.screen_mirroring, Vertical);
+    }
+
+    #[test]
+    fn test_with_trainer() {
+        let test_rom = create_rom(TestRom {
+            header: vec![
+                0x4E,
+                0x45,
+                0x53,
+                0x1A,
+                0x02,
+                0x01,
+                0x31 | 0b100,
+                00,
+                00,
+                00,
+                00,
+                00,
+                00,
+                00,
+                00,
+                00,
+            ],
+            trainer: Some(vec![0; 512]),
+            prg_rom: vec![1; 2 * 0x4000],
+            chr_rom: vec![2; 1 * 0x2000],
+        });
+
+        let rom: Rom = Rom::new(&test_rom);
+
+        assert_eq!(rom.chr_rom, vec!(2; 1 * 0x2000));
+        assert_eq!(rom.prg_rom, vec!(1; 2 * 0x4000));
+        assert_eq!(rom.mapper_id, 3);
+        assert_eq!(rom.screen_mirroring, Vertical);
     }
 }

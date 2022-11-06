@@ -44,7 +44,7 @@ impl PPU {
             register_address: PpuAddress::new(),
             // todo register_oam_dma: PpuOamDma::new(),
             scanline: 0,
-            cycles: 0,
+            cycles: 21,
             nmi: false,
         }
     }
@@ -100,12 +100,12 @@ impl PPU {
         }
     }
 
-    fn increment_adr(&mut self) {
+    fn increment_address(&mut self) {
         self.register_address
             .increment(self.register_control.get_address_increment());
     }
 
-    fn vram_mirror_adr(&self, address: u16) -> u16 {
+    fn mirror_vram_address(&self, address: u16) -> u16 {
         let mirrored_adr = address & 0x2fff;
         match (&self.mirroring, mirrored_adr) {
             (Horizontal, 0x2000..=0x27ff) => mirrored_adr & 0x03ff,
@@ -120,40 +120,42 @@ impl PPU {
     }
 
     pub fn read_data(&mut self) -> u8 {
-        let adr = self.register_address.address;
-        self.increment_adr();
+        let address = self.register_address.address;
+        self.increment_address();
 
-        match adr {
+        match address {
             0x0000..=0x1fff => {
                 let res = self.buffer;
-                self.buffer = self.chr_rom[adr as usize];
+                self.buffer = self.chr_rom[address as usize];
                 res
             }
             0x2000..=0x2fff => {
                 let res = self.buffer;
-                self.buffer = self.vram[self.vram_mirror_adr(adr) as usize];
+                self.buffer = self.vram[self.mirror_vram_address(address) as usize];
                 res
             }
             0x3000..=0x3eff => panic!(
                 "addresses in 0x3000..=0x3eff are not expected, requested: {}",
-                adr
+                address
             ),
-            0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => self.palette_table[(adr - 0x10 - 0x3f00) as usize],
-            0x3f00..=0x3fff => self.palette_table[(adr - 0x3f00) as usize],
+            0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
+                self.palette_table[(address - 0x10 - 0x3f00) as usize]
+            }
+            0x3f00..=0x3fff => self.palette_table[(address - 0x3f00) as usize],
             _ => panic!(
                 "addresses in 0x4000..=0xffff are not expected, requested: {}",
-                adr
+                address
             ),
         }
     }
 
     pub fn write_data(&mut self, data: u8) {
         let adr = self.register_address.address;
-        self.increment_adr();
+        self.increment_address();
 
         match adr {
             0x0000..=0x1fff => panic!("Attempted to write to chr rom at {:#x}", adr),
-            0x2000..=0x2fff => self.vram[self.vram_mirror_adr(adr) as usize] = data,
+            0x2000..=0x2fff => self.vram[self.mirror_vram_address(adr) as usize] = data,
             0x3000..=0x3eff => panic!(
                 "addresses in 0x3000..=0x3eff are not expected, requested: {:#x}",
                 adr

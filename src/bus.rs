@@ -6,7 +6,7 @@ use crate::ppu::PPU;
 pub struct Bus<'call> {
     cpu_ram: [u8; 0x0800],
     prg_rom: Vec<u8>,
-    ppu: PPU,
+    pub ppu: PPU,
     joypad_1: Joypad,
 
     callback: Box<dyn FnMut(&PPU, &mut Joypad) + 'call>,
@@ -31,11 +31,7 @@ impl<'a> Bus<'a> {
 
     pub fn tick(&mut self, cycles: u8) {
         //self.cycles += cycles;
-        let nmi_before = self.ppu.nmi;
-        self.ppu.tick(3 * cycles);
-        let nmi_after = self.ppu.nmi;
-
-        if !nmi_before && nmi_after {
+        if self.ppu.tick(3 * cycles) {
             (self.callback)(&self.ppu, &mut self.joypad_1);
         }
     }

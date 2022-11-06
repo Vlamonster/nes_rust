@@ -18,6 +18,7 @@ use crate::joypad::{
 };
 use crate::ppu::PPU;
 use crate::render::{Frame, PALETTE};
+use crate::trace::trace;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
@@ -86,7 +87,7 @@ fn main() {
         .unwrap();
 
     //load the game
-    let bytes: Vec<u8> = fs::read("nestest.nes").unwrap();
+    let bytes: Vec<u8> = fs::read("pacman.nes").unwrap();
     let rom = Rom::new(&bytes);
 
     let mut frame = Frame::new();
@@ -137,4 +138,10 @@ fn main() {
 
     cpu.reset();
     cpu.run(false, 0);
+
+    // // nestest code
+    // cpu.pc = 0xc000;
+    // cpu.run_with_callback(move |cpu| {
+    //     println!("{}", trace(cpu));
+    // }, false, 0);
 }
