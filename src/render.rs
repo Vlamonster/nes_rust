@@ -115,18 +115,18 @@ pub fn render(ppu: &PPU, frame: &mut Frame) {
         let offset_y = i / 32;
         let tile = &ppu.chr_rom[(offset_rom + tile_index * 16) as usize
             ..=(offset_rom + tile_index * 16 + 15) as usize];
-        let _palette = background_palette(ppu, offset_x, offset_y);
+        let palette = background_palette(ppu, offset_x, offset_y);
 
         for y in 0..=7 {
-            let color_hi = tile[y].reverse_bits();
-            let color_lo = tile[y + 8].reverse_bits();
+            let color_lo = tile[y].reverse_bits();
+            let color_hi = tile[y + 8].reverse_bits();
 
             for x in 0..=7 {
                 let rgb = match ((color_hi >> x) & 1) << 1 | ((color_lo >> x) & 1) {
-                    0 => PALETTE[0x01],
-                    1 => PALETTE[0x23],
-                    2 => PALETTE[0x27],
-                    3 => PALETTE[0x30],
+                    0 => PALETTE[palette[0] as usize],
+                    1 => PALETTE[palette[1] as usize],
+                    2 => PALETTE[palette[2] as usize],
+                    3 => PALETTE[palette[3] as usize],
                     _ => unreachable!(),
                 };
                 frame.set_pixel(offset_x * 8 + x, offset_y * 8 + y, rgb)
@@ -135,52 +135,52 @@ pub fn render(ppu: &PPU, frame: &mut Frame) {
     }
 
     // Draw sprites
-    // for i in (0..ppu.oam_data.len()).step_by(4).rev() {
-    //     let tile_idx = ppu.oam_data[i + 1] as u16;
-    //     let tile_x = ppu.oam_data[i + 3] as usize;
-    //     let tile_y = ppu.oam_data[i] as usize;
-    //
-    //     let flip_vertical = if ppu.oam_data[i + 2] >> 7 & 1 == 1 {
-    //         true
-    //     } else {
-    //         false
-    //     };
-    //     let flip_horizontal = if ppu.oam_data[i + 2] >> 6 & 1 == 1 {
-    //         true
-    //     } else {
-    //         false
-    //     };
-    //     let palette_index = ppu.oam_data[i + 2] & 0b11;
-    //     let sprite_palette = sprite_palette(ppu, palette_index);
-    //
-    //     let bank: u16 = ppu.register_control.sprite_pattern_address();
-    //
-    //     let tile = &ppu.chr_rom[(bank + tile_idx * 16) as usize..=(bank + tile_idx * 16 + 15) as usize];
-    //
-    //
-    //     for y in 0..=7 {
-    //         let mut upper = tile[y];
-    //         let mut lower = tile[y + 8];
-    //         'ololo: for x in (0..=7).rev() {
-    //             let value = (1 & lower) << 1 | (1 & upper);
-    //             upper = upper >> 1;
-    //             lower = lower >> 1;
-    //             let rgb = match value {
-    //                 0 => continue 'ololo, // skip coloring the pixel
-    //                 1 => PALETTE[sprite_palette[1] as usize],
-    //                 2 => PALETTE[sprite_palette[2] as usize],
-    //                 3 => PALETTE[sprite_palette[3] as usize],
-    //                 _ => unreachable!(),
-    //             };
-    //             match (flip_horizontal, flip_vertical) {
-    //                 (false, false) => frame.set_pixel(tile_x + x, tile_y + y, rgb),
-    //                 (true, false) => frame.set_pixel(tile_x + 7 - x, tile_y + y, rgb),
-    //                 (false, true) => frame.set_pixel(tile_x + x, tile_y + 7 - y, rgb),
-    //                 (true, true) => frame.set_pixel(tile_x + 7 - x, tile_y + 7 - y, rgb),
-    //             }
-    //         }
-    //     }
-    // }
+    for i in (0..ppu.oam_data.len()).step_by(4).rev() {
+        let tile_idx = ppu.oam_data[i + 1] as u16;
+        let tile_x = ppu.oam_data[i + 3] as usize;
+        let tile_y = ppu.oam_data[i] as usize;
+
+        let flip_vertical = if ppu.oam_data[i + 2] >> 7 & 1 == 1 {
+            true
+        } else {
+            false
+        };
+        let flip_horizontal = if ppu.oam_data[i + 2] >> 6 & 1 == 1 {
+            true
+        } else {
+            false
+        };
+        let palette_index = ppu.oam_data[i + 2] & 0b11;
+        let sprite_palette = sprite_palette(ppu, palette_index);
+
+        let bank: u16 = ppu.register_control.sprite_pattern_address();
+
+        let tile =
+            &ppu.chr_rom[(bank + tile_idx * 16) as usize..=(bank + tile_idx * 16 + 15) as usize];
+
+        for y in 0..=7 {
+            let mut upper = tile[y];
+            let mut lower = tile[y + 8];
+            'ololo: for x in (0..=7).rev() {
+                let value = (1 & lower) << 1 | (1 & upper);
+                upper = upper >> 1;
+                lower = lower >> 1;
+                let rgb = match value {
+                    0 => continue 'ololo, // skip coloring the pixel
+                    1 => PALETTE[sprite_palette[1] as usize],
+                    2 => PALETTE[sprite_palette[2] as usize],
+                    3 => PALETTE[sprite_palette[3] as usize],
+                    _ => unreachable!(),
+                };
+                match (flip_horizontal, flip_vertical) {
+                    (false, false) => frame.set_pixel(tile_x + x, tile_y + y, rgb),
+                    (true, false) => frame.set_pixel(tile_x + 7 - x, tile_y + y, rgb),
+                    (false, true) => frame.set_pixel(tile_x + x, tile_y + 7 - y, rgb),
+                    (true, true) => frame.set_pixel(tile_x + 7 - x, tile_y + 7 - y, rgb),
+                }
+            }
+        }
+    }
 }
 
 pub struct Frame {

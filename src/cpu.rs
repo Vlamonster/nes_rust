@@ -222,13 +222,6 @@ impl CPU<'_> {
 
             // Fetch opcode and increment program counter
             let code = self.read(self.pc);
-
-            // println!("{:#x}", self.pc);
-            // println!("{:#x}, {:#x}", self.pc, code);
-            // if self.pc == 0xc240 {
-            //      println!("opcode: {:#x}", code);
-            // }
-
             self.pc += 1;
             let pc_before_instruction = self.pc;
 
